@@ -8,5 +8,5 @@ CREATE TABLE spaces (
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT spaces_type_check 
-        CHECK (type IN ('padel', 'futbol', 'salon'))
+        CHECK (type IN ('cancha_padel', 'cancha_futbol', 'quincho'))
 );

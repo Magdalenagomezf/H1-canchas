@@ -16,6 +16,6 @@ type Space struct {
 // Tipos de espacio disponibles.
 const (
 	SpaceTypePadel   = "cancha_padel"
-	SpaceTypeTenis   = "cancha_tenis"
+	SpaceTypeFutbol  = "cancha_futbol"
 	SpaceTypeQuincho = "quincho"
 )

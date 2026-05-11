@@ -12,6 +12,7 @@ import (
 type Config struct {
 	Port string
 	DSN  string // connection string para PostgreSQL
+	JWTSecret string
 }
 
 // Load lee el .env y arma la Config.
@@ -28,8 +29,9 @@ func Load() (*Config, error) {
 	user := mustGetEnv("DB_USER")
 	password := mustGetEnv("DB_PASSWORD")
 	dbName := mustGetEnv("DB_NAME")
+	jwtSecret := mustGetEnv("JWT_SECRET")
 
-	if host == "" || dbPort == "" || user == "" || password == "" || dbName == "" {
+	if host == "" || dbPort == "" || user == "" || password == "" || dbName == "" || jwtSecret == "" {
 		return nil, fmt.Errorf("faltan variables de entorno de base de datos")
 	}
 
@@ -41,6 +43,7 @@ func Load() (*Config, error) {
 	return &Config{
 		Port: port,
 		DSN:  dsn,
+		JWTSecret: jwtSecret,
 	}, nil
 }
 

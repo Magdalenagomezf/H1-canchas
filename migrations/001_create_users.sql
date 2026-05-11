@@ -3,10 +3,10 @@ CREATE TABLE users (
 
     name VARCHAR(100) NOT NULL,
 
-    email VARCHAR(150) UNIQUE NOT NULL,
-    phone VARCHAR(30) NOT NULL,
+    email VARCHAR(150) UNIQUE,
+    phone VARCHAR(30) NOT NULL UNIQUE,
 
-    password_hash TEXT,
+    password_hash TEXT NOT NULL,    
 
     role VARCHAR(30) NOT NULL DEFAULT 'customer',
 

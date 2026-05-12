@@ -19,6 +19,12 @@ var (
 	ErrNotFound     = errors.New("recurso no encontrado")
 	ErrUnauthorized = errors.New("no autorizado")
 
+	// spaces
+	ErrSpaceNameRequired = errors.New("el nombre del espacio es obligatorio")
+	ErrInvalidSpaceType  = errors.New("tipo de espacio inválido")
+	ErrInvalidSpacePrice = errors.New("el precio del espacio debe ser mayor a cero")
+	ErrInvalidSpaceID    = errors.New("id de espacio inválido")
+
 	// bookings — los agregás cuando llegues a ese service
 	// ErrSlotNotAvailable = errors.New("el turno no está disponible")
 	// ErrBookingNotFound  = errors.New("reserva no encontrada")

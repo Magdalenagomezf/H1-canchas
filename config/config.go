@@ -10,15 +10,15 @@ import (
 // Config agrupa toda la configuración de la app.
 // Se carga una vez al arrancar y se pasa a quien la necesite.
 type Config struct {
-	Port string
-	DSN  string // connection string para PostgreSQL
+	Port      string
+	DSN       string // connection string para PostgreSQL
 	JWTSecret string
 }
 
 // Load lee el .env y arma la Config.
 // Si no encuentra una variable obligatoria, devuelve error.
 func Load() (*Config, error) {
-	// godotenv.Load no falla si no existe .env (útil en producción
+	// godotenv.Load falla si no existe .env (útil en producción
 	// donde las vars vienen del sistema operativo directamente)
 	_ = godotenv.Load()
 
@@ -41,8 +41,8 @@ func Load() (*Config, error) {
 	)
 
 	return &Config{
-		Port: port,
-		DSN:  dsn,
+		Port:      port,
+		DSN:       dsn,
 		JWTSecret: jwtSecret,
 	}, nil
 }

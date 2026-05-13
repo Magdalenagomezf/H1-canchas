@@ -26,14 +26,19 @@ func main() {
 		log.Fatal(err)
 	}
 	defer db.Close()
-	// te amoooooo
+
 	userRepo := repository.NewUserRepository(db)
+	// por
 	userService := service.NewUserService(userRepo, cfg.JWTSecret)
 	authCtrl := controllers.NewAuthController(userService)
 
 	spaceRepo := repository.NewSpaceRepository(db)
 	spaceService := service.NewSpaceService(spaceRepo)
 	spaceController := controllers.NewSpaceController(spaceService)
+
+	bookingRepo := repository.NewBookingRepository(db)
+	bookingService := service.NewBookingService(bookingRepo, spaceRepo)
+	bookingCtrl := controllers.NewBookingController(bookingService)
 
 	r := gin.Default()
 
@@ -61,6 +66,20 @@ func main() {
 	{
 		protected.POST("/spaces", middleware.RequireRole(domain.RoleAdmin, domain.RoleReceptionist), spaceController.Create)
 		protected.DELETE("/spaces/:id", middleware.RequireRole(domain.RoleAdmin), spaceController.Deactivate)
+		// Bookings
+		protected.POST("/bookings", bookingCtrl.Create)
+
+		protected.POST("/bookings/manual", middleware.RequireRole(domain.RoleAdmin, domain.RoleReceptionist), bookingCtrl.CreateManual)
+
+		protected.GET(
+			"/bookings",
+			bookingCtrl.GetMyBookings,
+		)
+
+		protected.PATCH(
+			"/bookings/:id/cancel",
+			bookingCtrl.Cancel,
+		)
 	}
 
 	log.Println("Servidor corriendo en puerto " + cfg.Port)

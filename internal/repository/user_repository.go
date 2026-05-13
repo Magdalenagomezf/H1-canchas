@@ -23,9 +23,10 @@ func NewUserRepository(db *sqlx.DB) *userRepo {
 }
 
 func (r *userRepo) Create(ctx context.Context, user *domain.User) (int64, error) {
+	// para que es el value 
 	query := `
         INSERT INTO users (name, email, phone, password_hash, role)
-        VALUES ($1, $2, $3, $4, $5)
+        VALUES ($1, $2, $3, $4, $5) 
         RETURNING id`
 
 	var id int64

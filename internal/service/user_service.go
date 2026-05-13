@@ -82,7 +82,7 @@ func (s *UserService) Register(ctx context.Context, name, phone, password string
 		Phone:        phone,
 		Email:        email,
 		PasswordHash: string(hash),
-		Role:         domain.RoleCustomer,
+		Role:         domain.RoleCustomer, // generico? deberia cambair? o hacer una nueva funcion?
 	}
 
 	id, err := s.repo.Create(ctx, user)

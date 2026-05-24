@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"errors"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -54,7 +55,14 @@ func (h *BookingController) Create(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, dto.FromBooking(*booking))
+	role := c.GetString("role")
+	detail, err := h.bookingService.GetByID(c.Request.Context(), booking.ID, userID, role)
+	if err != nil {
+		h.handleBookingError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusCreated, dto.FromBookingDetail(*detail))
 }
 
 // CreateManual godoc — POST /bookings/manual
@@ -92,7 +100,14 @@ func (h *BookingController) CreateManual(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, dto.FromBooking(*booking))
+	role := c.GetString("role")
+	detail, err := h.bookingService.GetByID(c.Request.Context(), booking.ID, createdBy, role)
+	if err != nil {
+		h.handleBookingError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusCreated, dto.FromBookingDetail(*detail))
 }
 
 // GetMyBookings godoc — GET /bookings
@@ -107,8 +122,8 @@ func (h *BookingController) GetMyBookings(c *gin.Context) {
 	role := c.GetString("role")
 
 	var (
-		bookings []domain.Booking
-		err      error
+		rows []domain.BookingDetail
+		err  error
 	)
 
 	if role == domain.RoleReceptionist || role == domain.RoleAdmin {
@@ -124,19 +139,21 @@ func (h *BookingController) GetMyBookings(c *gin.Context) {
 			dateFilter = &d
 		}
 
-		bookings, err = h.bookingService.GetAll(c.Request.Context(), dateFilter)
+		rows, err = h.bookingService.GetAll(c.Request.Context(), dateFilter)
 	} else {
-		bookings, err = h.bookingService.GetMyBookings(c.Request.Context(), userID)
+		rows, err = h.bookingService.GetMyBookings(c.Request.Context(), userID)
+
 	}
 
 	if err != nil {
+		log.Printf("GetMyBookings error: %v", err)
 		h.handleBookingError(c, err)
 		return
 	}
 
-	response := make([]dto.BookingResponse, 0, len(bookings))
-	for _, booking := range bookings {
-		response = append(response, dto.FromBooking(booking))
+	response := make([]dto.BookingDetailResponse, 0, len(rows))
+	for _, row := range rows {
+		response = append(response, dto.FromBookingDetail(row))
 	}
 
 	c.JSON(http.StatusOK, response)
@@ -165,6 +182,26 @@ func (h *BookingController) Cancel(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "reserva cancelada correctamente"})
+}
+
+func (h *BookingController) GetByID(c *gin.Context) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": service.ErrInvalidBookingID.Error()})
+		return
+	}
+
+	userID := c.GetInt64("user_id")
+	role := c.GetString("role")
+
+	row, err := h.bookingService.GetByID(c.Request.Context(), id, userID, role)
+	if err != nil {
+		log.Printf("GetByID error: %v", err)
+		h.handleBookingError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.FromBookingDetail(*row))
 }
 
 func (h *BookingController) handleBookingError(c *gin.Context, err error) {

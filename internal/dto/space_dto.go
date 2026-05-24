@@ -29,4 +29,20 @@ type SlotResponse struct {
 	EndTime     *string `json:"end_time,omitempty"`
 }
 
+// UpdateSpaceRequest es el JSON para editar un espacio existente.
+// El tipo no es editable — cambiar cancha_padel a quincho rompe datos históricos.
+type UpdateSpaceRequest struct {
+	Name         string  `json:"name"          binding:"required"`
+	Description  *string `json:"description"`
+	PricePerSlot float64 `json:"price_per_slot" binding:"required"`
+}
+
+// CreateSlotRequest es el JSON para agregar un slot a un espacio.
+type CreateSlotRequest struct {
+	Label       string  `json:"label"       binding:"required"`
+	Description *string `json:"description"`
+	StartTime   *string `json:"start_time"`
+	EndTime     *string `json:"end_time"`
+}
+
 // SpaceWithSlotsResponse agrupa espacio y sus turnos en una sola respuesta.

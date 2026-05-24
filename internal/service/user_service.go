@@ -37,7 +37,6 @@ func NewUserService(repo UserRepo, jwtSecret string) *UserService {
 func (s *UserService) Register(ctx context.Context, name, phone, password string, email *string) (string, error) {
 	name = strings.TrimSpace(name)
 	phone = strings.TrimSpace(phone)
-	password = strings.TrimSpace(password)
 
 	if email != nil {
 		cleanEmail := strings.TrimSpace(*email)
@@ -82,7 +81,7 @@ func (s *UserService) Register(ctx context.Context, name, phone, password string
 		Phone:        phone,
 		Email:        email,
 		PasswordHash: string(hash),
-		Role:         domain.RoleCustomer, // generico? deberia cambair? o hacer una nueva funcion?
+		Role:         domain.RoleCustomer,
 	}
 
 	id, err := s.repo.Create(ctx, user)
@@ -96,6 +95,67 @@ func (s *UserService) Register(ctx context.Context, name, phone, password string
 	}
 
 	return token, nil
+}
+
+// CreateStaff crea un usuario con rol receptionist o admin.
+// Solo puede llamarlo un admin. Devuelve el ID del usuario creado.
+func (s *UserService) CreateStaff(ctx context.Context, name, phone, password, role string, email *string) (int64, error) {
+	name = strings.TrimSpace(name)
+	phone = strings.TrimSpace(phone)
+
+	if email != nil {
+		cleanEmail := strings.TrimSpace(*email)
+		if cleanEmail == "" {
+			email = nil
+		} else {
+			email = &cleanEmail
+		}
+	}
+
+	if role != domain.RoleReceptionist && role != domain.RoleAdmin {
+		return 0, ErrInvalidRole
+	}
+
+	if name == "" {
+		return 0, ErrNameRequired
+	}
+	if phone == "" {
+		return 0, ErrPhoneRequired
+	}
+	if password == "" {
+		return 0, ErrPasswordRequired
+	}
+	if len(password) < 6 {
+		return 0, ErrPasswordTooShort
+	}
+
+	existing, err := s.repo.FindByPhone(ctx, phone)
+	if err != nil {
+		return 0, fmt.Errorf("CreateStaff: %w", err)
+	}
+	if existing != nil {
+		return 0, ErrPhoneAlreadyExists
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), 12)
+	if err != nil {
+		return 0, fmt.Errorf("CreateStaff: hasheando password: %w", err)
+	}
+
+	user := &domain.User{
+		Name:         name,
+		Phone:        phone,
+		Email:        email,
+		PasswordHash: string(hash),
+		Role:         role,
+	}
+
+	id, err := s.repo.Create(ctx, user)
+	if err != nil {
+		return 0, fmt.Errorf("CreateStaff: %w", err)
+	}
+
+	return id, nil
 }
 
 // Login valida las credenciales y devuelve un JWT si son correctas.

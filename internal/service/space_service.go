@@ -15,6 +15,8 @@ type SpaceRepo interface {
 	GetAll(ctx context.Context) ([]domain.Space, error)
 	GetByID(ctx context.Context, id int64) (*domain.Space, error)
 	GetSlotsBySpaceID(ctx context.Context, spaceID int64) ([]domain.SpaceSlot, error)
+	Update(ctx context.Context, id int64, name string, description *string, pricePerSlot float64) error
+	CreateSlot(ctx context.Context, slot *domain.SpaceSlot) (int64, error)
 	Deactivate(ctx context.Context, id int64) error
 }
 
@@ -113,6 +115,77 @@ func (s *SpaceService) GetSlots(ctx context.Context, spaceID int64) ([]domain.Sp
 	return slots, nil
 }
 
+func (s *SpaceService) CreateSlot(ctx context.Context, spaceID int64, label string, description, startTime, endTime *string) (int64, error) {
+	if spaceID <= 0 {
+		return 0, ErrInvalidSpaceID
+	}
+
+	label = strings.TrimSpace(label)
+	if label == "" {
+		return 0, ErrSlotLabelRequired
+	}
+
+	space, err := s.repo.GetByID(ctx, spaceID)
+	if err != nil {
+		return 0, fmt.Errorf("SpaceService.CreateSlot: %w", err)
+	}
+	if space == nil || !space.IsActive {
+		return 0, ErrNotFound
+	}
+
+	slot := &domain.SpaceSlot{
+		SpaceID:     spaceID,
+		Label:       label,
+		Description: description,
+		StartTime:   startTime,
+		EndTime:     endTime,
+	}
+
+	id, err := s.repo.CreateSlot(ctx, slot)
+	if err != nil {
+		return 0, fmt.Errorf("SpaceService.CreateSlot: %w", err)
+	}
+
+	return id, nil
+}
+
+func (s *SpaceService) Update(ctx context.Context, id int64, name string, description *string, pricePerSlot float64) error {
+	if id <= 0 {
+		return ErrInvalidSpaceID
+	}
+
+	name = strings.TrimSpace(name)
+	if description != nil {
+		clean := strings.TrimSpace(*description)
+		if clean == "" {
+			description = nil
+		} else {
+			description = &clean
+		}
+	}
+
+	if name == "" {
+		return ErrSpaceNameRequired
+	}
+	if pricePerSlot <= 0 {
+		return ErrInvalidSpacePrice
+	}
+
+	space, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return fmt.Errorf("SpaceService.Update: %w", err)
+	}
+	if space == nil || !space.IsActive {
+		return ErrNotFound
+	}
+
+	if err := s.repo.Update(ctx, id, name, description, pricePerSlot); err != nil {
+		return fmt.Errorf("SpaceService.Update: %w", err)
+	}
+
+	return nil
+}
+
 func (s *SpaceService) Deactivate(ctx context.Context, id int64) error {
 	if id <= 0 {
 		return ErrInvalidSpaceID
@@ -123,7 +196,7 @@ func (s *SpaceService) Deactivate(ctx context.Context, id int64) error {
 		return fmt.Errorf("SpaceService.Deactivate: %w", err)
 	}
 
-	if space == nil {
+	if space == nil || !space.IsActive {
 		return ErrNotFound
 	}
 

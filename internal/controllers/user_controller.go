@@ -36,7 +36,7 @@ func (h *AuthController) Register(c *gin.Context) {
 
 	token, err := h.userService.Register(c.Request.Context(), req.Name, req.Phone, req.Password, email)
 	if err != nil {
-		log.Printf("Register error: %v", err) // ← agregá esta línea
+		log.Printf("Register error: %v", err)
 		if errors.Is(err, service.ErrPhoneAlreadyExists) {
 			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 			return
@@ -46,6 +46,41 @@ func (h *AuthController) Register(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, gin.H{"token": token})
+}
+
+// CreateStaff godoc — POST /admin/users
+// Admin crea un usuario con rol receptionist o admin.
+func (h *AuthController) CreateStaff(c *gin.Context) {
+	var req dto.CreateStaffRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "payload inválido: " + err.Error()})
+		return
+	}
+
+	var email *string
+	if req.Email != "" {
+		email = &req.Email
+	}
+
+	id, err := h.userService.CreateStaff(c.Request.Context(), req.Name, req.Phone, req.Password, req.Role, email)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrInvalidRole),
+			errors.Is(err, service.ErrNameRequired),
+			errors.Is(err, service.ErrPhoneRequired),
+			errors.Is(err, service.ErrPasswordRequired),
+			errors.Is(err, service.ErrPasswordTooShort):
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		case errors.Is(err, service.ErrPhoneAlreadyExists):
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		default:
+			log.Printf("CreateStaff error: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "error interno"})
+		}
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{"id": id})
 }
 
 // Login godoc

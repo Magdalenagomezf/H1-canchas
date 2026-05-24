@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"H1-canchas/internal/domain"
@@ -155,76 +156,6 @@ func (r *bookingRepo) GetByID(ctx context.Context, id int64) (*domain.Booking, e
 	return &booking, nil
 }
 
-// GetByUserID devuelve todas las reservas asociadas a un usuario cliente.
-// Sirve para "mis reservas".
-func (r *bookingRepo) GetByUserID(ctx context.Context, userID int64) ([]domain.Booking, error) {
-	query := `
-		SELECT
-			id,
-			customer_user_id,
-			created_by,
-			customer_name,
-			customer_phone,
-			space_id,
-			slot_id,
-			booking_date,
-			status,
-			total_price,
-			created_at,
-			updated_at
-		FROM bookings
-		WHERE customer_user_id = $1
-		ORDER BY booking_date DESC, created_at DESC`
-
-	var bookings []domain.Booking
-	err := r.db.SelectContext(ctx, &bookings, query, userID)
-	if err != nil {
-		return nil, fmt.Errorf("bookingRepo.GetByUserID: %w", err)
-	}
-
-	return bookings, nil
-}
-
-// GetAll devuelve todas las reservas.
-// Si date viene cargada, filtra por fecha.
-// Este método debería usarse solo desde endpoints de admin/recepcionista.
-func (r *bookingRepo) GetAll(ctx context.Context, date *time.Time) ([]domain.Booking, error) {
-	query := `
-		SELECT
-			id,
-			customer_user_id,
-			created_by,
-			customer_name,
-			customer_phone,
-			space_id,
-			slot_id,
-			booking_date,
-			status,
-			total_price,
-			created_at,
-			updated_at
-		FROM bookings`
-
-	args := []interface{}{}
-
-	if date != nil {
-		query += `
-		WHERE booking_date = $1`
-		args = append(args, *date)
-	}
-
-	query += `
-		ORDER BY booking_date DESC, created_at DESC`
-
-	var bookings []domain.Booking
-	err := r.db.SelectContext(ctx, &bookings, query, args...)
-	if err != nil {
-		return nil, fmt.Errorf("bookingRepo.GetAll: %w", err)
-	}
-
-	return bookings, nil
-}
-
 // UpdateStatus cambia parcialmente una reserva.
 // Por ejemplo: pending/confirmed -> cancelled.
 // Devuelve true si realmente modificó una fila.
@@ -245,4 +176,105 @@ func (r *bookingRepo) UpdateStatus(ctx context.Context, id int64, status string)
 	}
 
 	return rowsAffected > 0, nil
+}
+
+// GetAllWithDetails devuelve todas las reservas con JOIN a spaces, slots y users.
+// Si date viene cargada, filtra por fecha.
+// Si userID viene cargado, filtra por cliente (para GET /bookings del customer).
+func (r *bookingRepo) GetAllWithDetails(ctx context.Context, userID *int64, date *time.Time) ([]domain.BookingDetail, error) {
+	query := `
+        SELECT
+            b.id,
+            b.booking_date,
+            b.status,
+            b.total_price,
+            b.created_at,
+            b.updated_at,
+            b.customer_user_id,
+            b.customer_name,
+            b.customer_phone,
+
+            s.id        AS space_id,
+            s.name      AS space_name,
+            s.type      AS space_type,
+
+            sl.id         AS slot_id,
+            sl.label      AS slot_label,
+            sl.start_time AS slot_start_time,
+            sl.end_time   AS slot_end_time,
+
+            u.name  AS customer_user_name,
+            u.phone AS customer_user_phone
+
+        FROM bookings b
+        JOIN spaces s        ON s.id  = b.space_id
+        JOIN space_slots sl  ON sl.id = b.slot_id
+        LEFT JOIN users u    ON u.id  = b.customer_user_id`
+
+	args := []interface{}{}
+	conditions := []string{}
+
+	if userID != nil {
+		conditions = append(conditions, fmt.Sprintf("b.customer_user_id = $%d", len(args)+1))
+		args = append(args, *userID)
+	}
+	if date != nil {
+		conditions = append(conditions, fmt.Sprintf("b.booking_date = $%d", len(args)+1))
+		args = append(args, *date)
+	}
+	if len(conditions) > 0 {
+		query += " WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	query += ` ORDER BY b.booking_date DESC, b.created_at DESC`
+
+	var rows []domain.BookingDetail
+	err := r.db.SelectContext(ctx, &rows, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("bookingRepo.GetAllWithDetails: %w", err)
+	}
+	return rows, nil
+}
+
+// GetByIDWithDetails devuelve una reserva por ID con JOIN completo.
+func (r *bookingRepo) GetByIDWithDetails(ctx context.Context, id int64) (*domain.BookingDetail, error) {
+	query := `
+        SELECT
+            b.id,
+            b.booking_date,
+            b.status,
+            b.total_price,
+            b.created_at,
+            b.updated_at,
+            b.customer_user_id,
+            b.customer_name,
+            b.customer_phone,
+
+            s.id        AS space_id,
+            s.name      AS space_name,
+            s.type      AS space_type,
+
+            sl.id         AS slot_id,
+            sl.label      AS slot_label,
+            sl.start_time AS slot_start_time,
+            sl.end_time   AS slot_end_time,
+
+            u.name  AS customer_user_name,
+            u.phone AS customer_user_phone
+
+        FROM bookings b
+        JOIN spaces s        ON s.id  = b.space_id
+        JOIN space_slots sl  ON sl.id = b.slot_id
+        LEFT JOIN users u    ON u.id  = b.customer_user_id
+        WHERE b.id = $1`
+
+	var row domain.BookingDetail
+	err := r.db.GetContext(ctx, &row, query, id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("bookingRepo.GetByIDWithDetails: %w", err)
+	}
+	return &row, nil
 }

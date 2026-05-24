@@ -19,9 +19,9 @@ type BookingRepo interface {
 	SlotBelongsToSpace(ctx context.Context, spaceID, slotID int64) (bool, error)
 	Create(ctx context.Context, tx *sqlx.Tx, b *domain.Booking) (int64, error)
 	GetByID(ctx context.Context, id int64) (*domain.Booking, error)
-	GetByUserID(ctx context.Context, userID int64) ([]domain.Booking, error)
-	GetAll(ctx context.Context, date *time.Time) ([]domain.Booking, error)
 	UpdateStatus(ctx context.Context, id int64, status string) (bool, error)
+	GetAllWithDetails(ctx context.Context, userID *int64, date *time.Time) ([]domain.BookingDetail, error)
+	GetByIDWithDetails(ctx context.Context, id int64) (*domain.BookingDetail, error)
 }
 
 // SpaceRepoForBooking es lo mínimo que el booking service
@@ -40,13 +40,17 @@ func NewBookingService(repo BookingRepo, spaceRepo SpaceRepoForBooking) *Booking
 }
 
 // Create crea una reserva para un usuario registrado.
-// Usa transacción + FOR UPDATE para evitar doble reserva.
+// HACER MAS ADELANTE= Usa transacción + FOR UPDATE para evitar doble reserva.
 func (s *BookingService) Create(ctx context.Context, customerUserID int64, spaceID, slotID int64, date time.Time) (*domain.Booking, error) {
+	if date.Before(time.Now().UTC().Truncate(24 * time.Hour)) {
+		return nil, ErrInvalidBookingDate
+	}
+
 	space, err := s.spaceRepo.GetByID(ctx, spaceID)
 	if err != nil {
 		return nil, fmt.Errorf("BookingService.Create: %w", err)
 	}
-	if space == nil {
+	if space == nil || !space.IsActive {
 		return nil, ErrNotFound
 	}
 
@@ -110,11 +114,15 @@ func (s *BookingService) CreateManual(ctx context.Context, createdBy int64, spac
 		return nil, ErrPhoneRequired
 	}
 
+	if date.Before(time.Now().UTC().Truncate(24 * time.Hour)) {
+		return nil, ErrInvalidBookingDate
+	}
+
 	space, err := s.spaceRepo.GetByID(ctx, spaceID)
 	if err != nil {
 		return nil, fmt.Errorf("BookingService.CreateManual: %w", err)
 	}
-	if space == nil {
+	if space == nil || !space.IsActive {
 		return nil, ErrNotFound
 	}
 
@@ -165,21 +173,21 @@ func (s *BookingService) CreateManual(ctx context.Context, createdBy int64, spac
 }
 
 // GetMyBookings devuelve las reservas del usuario logueado.
-func (s *BookingService) GetMyBookings(ctx context.Context, userID int64) ([]domain.Booking, error) {
-	bookings, err := s.repo.GetByUserID(ctx, userID)
+func (s *BookingService) GetMyBookings(ctx context.Context, userID int64) ([]domain.BookingDetail, error) {
+	rows, err := s.repo.GetAllWithDetails(ctx, &userID, nil)
 	if err != nil {
 		return nil, fmt.Errorf("BookingService.GetMyBookings: %w", err)
 	}
-	return bookings, nil
+	return rows, nil
 }
 
 // GetAll devuelve todas las reservas. Solo para recepcionista/admin.
-func (s *BookingService) GetAll(ctx context.Context, date *time.Time) ([]domain.Booking, error) {
-	bookings, err := s.repo.GetAll(ctx, date)
+func (s *BookingService) GetAll(ctx context.Context, date *time.Time) ([]domain.BookingDetail, error) {
+	rows, err := s.repo.GetAllWithDetails(ctx, nil, date)
 	if err != nil {
 		return nil, fmt.Errorf("BookingService.GetAll: %w", err)
 	}
-	return bookings, nil
+	return rows, nil
 }
 
 // Cancel cancela una reserva.
@@ -216,4 +224,22 @@ func (s *BookingService) Cancel(ctx context.Context, bookingID, requesterID int6
 	}
 
 	return nil
+}
+
+func (s *BookingService) GetByID(ctx context.Context, bookingID, requesterID int64, requesterRole string) (*domain.BookingDetail, error) {
+	row, err := s.repo.GetByIDWithDetails(ctx, bookingID)
+	if err != nil {
+		return nil, fmt.Errorf("BookingService.GetByID: %w", err)
+	}
+	if row == nil {
+		return nil, ErrNotFound
+	}
+
+	isStaff := requesterRole == domain.RoleReceptionist || requesterRole == domain.RoleAdmin
+	isOwner := row.CustomerUserID != nil && *row.CustomerUserID == requesterID
+	if !isStaff && !isOwner {
+		return nil, ErrUnauthorized
+	}
+
+	return row, nil
 }

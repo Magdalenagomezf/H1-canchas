@@ -96,6 +96,39 @@ func (r *spaceRepo) GetSlotsBySpaceID(ctx context.Context, spaceID int64) ([]dom
 	return slots, nil
 }
 
+func (r *spaceRepo) CreateSlot(ctx context.Context, slot *domain.SpaceSlot) (int64, error) {
+	query := `
+		INSERT INTO space_slots (space_id, label, description, start_time, end_time)
+		VALUES ($1, $2, $3, $4, $5)
+		RETURNING id`
+
+	var id int64
+	err := r.db.QueryRowContext(ctx, query,
+		slot.SpaceID,
+		slot.Label,
+		slot.Description,
+		slot.StartTime,
+		slot.EndTime,
+	).Scan(&id)
+	if err != nil {
+		return 0, fmt.Errorf("spaceRepo.CreateSlot: %w", err)
+	}
+	return id, nil
+}
+
+func (r *spaceRepo) Update(ctx context.Context, id int64, name string, description *string, pricePerSlot float64) error {
+	query := `
+		UPDATE spaces
+		SET name = $1, description = $2, price_per_slot = $3
+		WHERE id = $4 AND is_active = true`
+
+	_, err := r.db.ExecContext(ctx, query, name, description, pricePerSlot, id)
+	if err != nil {
+		return fmt.Errorf("spaceRepo.Update: %w", err)
+	}
+	return nil
+}
+
 // desactiva un espacio
 func (r *spaceRepo) Deactivate(ctx context.Context, id int64) error {
 	query := `

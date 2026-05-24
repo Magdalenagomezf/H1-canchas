@@ -24,7 +24,9 @@ var (
 	ErrInvalidSpaceType  = errors.New("tipo de espacio inválido")
 	ErrInvalidSpacePrice = errors.New("el precio del espacio debe ser mayor a cero")
 	ErrInvalidSpaceID    = errors.New("id de espacio inválido")
+	ErrInvalidRole       = errors.New("rol inválido")
 
+	ErrSlotLabelRequired       = errors.New("el label del slot es obligatorio")
 	ErrSlotNotAvailable        = errors.New("el turno no está disponible")
 	ErrSlotDoesNotBelong       = errors.New("el slot no pertenece al espacio indicado")
 	ErrBookingAlreadyCancelled = errors.New("la reserva ya está cancelada")
@@ -32,7 +34,4 @@ var (
 	ErrInvalidBookingID        = errors.New("id de reserva inválido")
 	ErrInvalidSlotID           = errors.New("id de slot inválido")
 	ErrInvalidBookingDate      = errors.New("fecha de reserva inválida")
-	// bookings — los agregás cuando llegues a ese service
-	// ErrSlotNotAvailable = errors.New("el turno no está disponible")
-	// ErrBookingNotFound  = errors.New("reserva no encontrada")
 )

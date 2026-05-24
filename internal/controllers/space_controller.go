@@ -127,6 +127,69 @@ func (h *SpaceController) GetSlots(c *gin.Context) {
 
 	c.JSON(http.StatusOK, response)
 }
+// CreateSlot godoc — POST /spaces/:id/slots
+func (h *SpaceController) CreateSlot(c *gin.Context) {
+	spaceID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || spaceID <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "id inválido"})
+		return
+	}
+
+	var req dto.CreateSlotRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "datos inválidos: " + err.Error()})
+		return
+	}
+
+	id, err := h.spaceService.CreateSlot(c.Request.Context(), spaceID, req.Label, req.Description, req.StartTime, req.EndTime)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrInvalidSpaceID),
+			errors.Is(err, service.ErrSlotLabelRequired):
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		case errors.Is(err, service.ErrNotFound):
+			c.JSON(http.StatusNotFound, gin.H{"error": "espacio no encontrado"})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "error interno"})
+		}
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{"id": id})
+}
+
+// Update godoc — PUT /spaces/:id
+func (h *SpaceController) Update(c *gin.Context) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || id <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "id inválido"})
+		return
+	}
+
+	var req dto.UpdateSpaceRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "datos inválidos: " + err.Error()})
+		return
+	}
+
+	err = h.spaceService.Update(c.Request.Context(), id, req.Name, req.Description, req.PricePerSlot)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrInvalidSpaceID),
+			errors.Is(err, service.ErrSpaceNameRequired),
+			errors.Is(err, service.ErrInvalidSpacePrice):
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		case errors.Is(err, service.ErrNotFound):
+			c.JSON(http.StatusNotFound, gin.H{"error": "espacio no encontrado"})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "error interno"})
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "espacio actualizado"})
+}
+
 func (h *SpaceController) Deactivate(c *gin.Context) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil || id <= 0 {

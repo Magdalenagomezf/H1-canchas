@@ -28,7 +28,6 @@ func main() {
 	defer db.Close()
 
 	userRepo := repository.NewUserRepository(db)
-	// por
 	userService := service.NewUserService(userRepo, cfg.JWTSecret)
 	authCtrl := controllers.NewAuthController(userService)
 
@@ -64,22 +63,17 @@ func main() {
 	protected := r.Group("/")
 	protected.Use(middleware.Auth(cfg.JWTSecret))
 	{
+		protected.POST("/admin/users", middleware.RequireRole(domain.RoleAdmin), authCtrl.CreateStaff)
 		protected.POST("/spaces", middleware.RequireRole(domain.RoleAdmin, domain.RoleReceptionist), spaceController.Create)
+		protected.PUT("/spaces/:id", middleware.RequireRole(domain.RoleAdmin, domain.RoleReceptionist), spaceController.Update)
+		protected.POST("/spaces/:id/slots", middleware.RequireRole(domain.RoleAdmin), spaceController.CreateSlot)
 		protected.DELETE("/spaces/:id", middleware.RequireRole(domain.RoleAdmin), spaceController.Deactivate)
 		// Bookings
-		protected.POST("/bookings", bookingCtrl.Create)
-
+		protected.GET("/bookings", bookingCtrl.GetMyBookings)
+		protected.GET("/bookings/:id", bookingCtrl.GetByID)
 		protected.POST("/bookings/manual", middleware.RequireRole(domain.RoleAdmin, domain.RoleReceptionist), bookingCtrl.CreateManual)
-
-		protected.GET(
-			"/bookings",
-			bookingCtrl.GetMyBookings,
-		)
-
-		protected.PATCH(
-			"/bookings/:id/cancel",
-			bookingCtrl.Cancel,
-		)
+		protected.POST("/bookings", bookingCtrl.Create)
+		protected.PATCH("/bookings/:id/cancel", bookingCtrl.Cancel)
 	}
 
 	log.Println("Servidor corriendo en puerto " + cfg.Port)

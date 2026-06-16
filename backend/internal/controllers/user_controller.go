@@ -34,7 +34,7 @@ func (h *AuthController) Register(c *gin.Context) {
 		email = &req.Email
 	}
 
-	token, err := h.userService.Register(c.Request.Context(), req.Name, req.Phone, req.Password, email)
+	user, token, err := h.userService.Register(c.Request.Context(), req.Name, req.Phone, req.Password, email)
 	if err != nil {
 		log.Printf("Register error: %v", err)
 		if errors.Is(err, service.ErrPhoneAlreadyExists) {
@@ -45,7 +45,10 @@ func (h *AuthController) Register(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"token": token})
+	c.JSON(http.StatusCreated, dto.AuthResponse{
+		Token: token,
+		User:  dto.UserResponse{ID: user.ID, Name: user.Name, Phone: user.Phone, Role: user.Role},
+	})
 }
 
 // CreateStaff godoc — POST /admin/users
@@ -92,7 +95,7 @@ func (h *AuthController) Login(c *gin.Context) {
 		return
 	}
 
-	token, err := h.userService.Login(c.Request.Context(), req.Phone, req.Password)
+	user, token, err := h.userService.Login(c.Request.Context(), req.Phone, req.Password)
 	if err != nil {
 		if errors.Is(err, service.ErrInvalidCredentials) ||
 			errors.Is(err, service.ErrUserInactive) {
@@ -103,5 +106,8 @@ func (h *AuthController) Login(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"token": token})
+	c.JSON(http.StatusOK, dto.AuthResponse{
+		Token: token,
+		User:  dto.UserResponse{ID: user.ID, Name: user.Name, Phone: user.Phone, Role: user.Role},
+	})
 }

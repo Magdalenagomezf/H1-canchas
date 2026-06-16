@@ -2,37 +2,63 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Project structure
+
+```
+H1-canchas/
+├── backend/      # Go REST API (Gin)
+│   ├── cmd/      # Entry point
+│   ├── config/
+│   ├── internal/ # controllers, service, repository, domain, middleware, dto
+│   ├── migrations/
+│   └── pkg/      # jwt, database
+├── frontend/     # React + TypeScript + Vite
+│   └── src/
+├── docker-compose.yml
+└── CLAUDE.md
+```
+
 ## Commands
+
+All backend commands must be run from the `backend/` directory.
 
 ```bash
 # Run the server
-go run ./cmd/main.go
+cd backend && go run ./cmd/main.go
 
 # Build binary
-go build -o h1-canchas ./cmd/main.go
+cd backend && go build -o h1-canchas ./cmd/main.go
 
 # Run tests
-go test ./...
+cd backend && go test ./...
 
 # Run a single package's tests
-go test ./internal/service/...
+cd backend && go test ./internal/service/...
 
-# Start the database (Docker)
+# Start the database (Docker) — run from project root
 docker-compose up -d
 
 # Stop the database
 docker-compose down
+
+# Frontend dev server
+cd frontend && npm run dev
+
+# Frontend build
+cd frontend && npm run build
 ```
 
-There is no migration runner wired into the app — migrations in `migrations/` must be applied manually against the PostgreSQL database (e.g. with `psql`). Run them in order (001 → 004).
+There is no migration runner wired into the app — migrations in `backend/migrations/` must be applied manually against the PostgreSQL database (e.g. with `psql`). Run them in order (001 → 004).
 
 ## Environment
 
-Copy `.env.example` to `.env`. Required variables: `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `JWT_SECRET`. `PORT` defaults to `8080`.
+**Backend:** copy `backend/.env.example` to `backend/.env`. Required variables: `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `JWT_SECRET`. `PORT` defaults to `8080`.
+
+**Frontend:** `frontend/.env` already contains `VITE_API_URL=http://localhost:8080`. Adjust if needed.
 
 ## Architecture
 
-The app is a REST API (Gin) for booking sports courts ("canchas") and event spaces. Entry point is `cmd/main.go`, which wires dependencies manually — no DI framework.
+The app is a REST API (Gin) for booking sports courts ("canchas") and event spaces. Entry point is `backend/cmd/main.go`, which wires dependencies manually — no DI framework.
 
 **Layer structure (dependency direction: controller → service → repository → DB):**
 

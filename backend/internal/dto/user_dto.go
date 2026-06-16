@@ -23,3 +23,18 @@ type CreateStaffRequest struct {
 	Role     string `json:"role"     binding:"required"` // "receptionist" o "admin"
 	Email    string `json:"email"`                       // opcional
 }
+
+// UserResponse es el subconjunto de datos del usuario que se expone en la API.
+// No incluye password_hash ni campos internos.
+type UserResponse struct {
+	ID    int64  `json:"id"`
+	Name  string `json:"name"`
+	Phone string `json:"phone"`
+	Role  string `json:"role"`
+}
+
+// AuthResponse es lo que devuelven /auth/login y /auth/register.
+type AuthResponse struct {
+	Token string       `json:"token"`
+	User  UserResponse `json:"user"`
+}

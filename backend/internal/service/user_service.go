@@ -34,7 +34,7 @@ func NewUserService(repo UserRepo, jwtSecret string) *UserService {
 
 // Register crea un usuario nuevo.
 // Valida que el teléfono no esté en uso y hashea la password.
-func (s *UserService) Register(ctx context.Context, name, phone, password string, email *string) (string, error) {
+func (s *UserService) Register(ctx context.Context, name, phone, password string, email *string) (*domain.User, string, error) {
 	name = strings.TrimSpace(name)
 	phone = strings.TrimSpace(phone)
 
@@ -48,32 +48,32 @@ func (s *UserService) Register(ctx context.Context, name, phone, password string
 	}
 
 	if name == "" {
-		return "", ErrNameRequired
+		return nil, "", ErrNameRequired
 	}
 
 	if phone == "" {
-		return "", ErrPhoneRequired
+		return nil, "", ErrPhoneRequired
 	}
 
 	if password == "" {
-		return "", ErrPasswordRequired
+		return nil, "", ErrPasswordRequired
 	}
 	if len(password) < 6 {
-		return "", ErrPasswordTooShort
+		return nil, "", ErrPasswordTooShort
 	}
 
 	existing, err := s.repo.FindByPhone(ctx, phone)
 	if err != nil {
-		return "", fmt.Errorf("Register: %w", err)
+		return nil, "", fmt.Errorf("Register: %w", err)
 	}
 
 	if existing != nil {
-		return "", ErrPhoneAlreadyExists
+		return nil, "", ErrPhoneAlreadyExists
 	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), 12)
 	if err != nil {
-		return "", fmt.Errorf("Register: hasheando password: %w", err)
+		return nil, "", fmt.Errorf("Register: hasheando password: %w", err)
 	}
 
 	user := &domain.User{
@@ -86,15 +86,17 @@ func (s *UserService) Register(ctx context.Context, name, phone, password string
 
 	id, err := s.repo.Create(ctx, user)
 	if err != nil {
-		return "", fmt.Errorf("Register: %w", err)
+		return nil, "", fmt.Errorf("Register: %w", err)
 	}
+
+	user.ID = id
 
 	token, err := jwtutil.GenerateToken(id, user.Role, s.jwtSecret)
 	if err != nil {
-		return "", fmt.Errorf("Register: generando token: %w", err)
+		return nil, "", fmt.Errorf("Register: generando token: %w", err)
 	}
 
-	return token, nil
+	return user, token, nil
 }
 
 // CreateStaff crea un usuario con rol receptionist o admin.
@@ -158,37 +160,37 @@ func (s *UserService) CreateStaff(ctx context.Context, name, phone, password, ro
 	return id, nil
 }
 
-// Login valida las credenciales y devuelve un JWT si son correctas.
-func (s *UserService) Login(ctx context.Context, phone, password string) (string, error) {
+// Login valida las credenciales y devuelve el usuario y un JWT si son correctas.
+func (s *UserService) Login(ctx context.Context, phone, password string) (*domain.User, string, error) {
 	phone = strings.TrimSpace(phone)
 	password = strings.TrimSpace(password)
 
 	if phone == "" || password == "" {
-		return "", ErrInvalidCredentials
+		return nil, "", ErrInvalidCredentials
 	}
 
 	user, err := s.repo.FindByPhone(ctx, phone)
 	if err != nil {
-		return "", fmt.Errorf("Login: %w", err)
+		return nil, "", fmt.Errorf("Login: %w", err)
 	}
 
 	if user == nil {
-		return "", ErrInvalidCredentials
+		return nil, "", ErrInvalidCredentials
 	}
 
 	if !user.IsActive {
-		return "", ErrUserInactive
+		return nil, "", ErrUserInactive
 	}
 
 	err = bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password))
 	if err != nil {
-		return "", ErrInvalidCredentials
+		return nil, "", ErrInvalidCredentials
 	}
 
 	token, err := jwtutil.GenerateToken(user.ID, user.Role, s.jwtSecret)
 	if err != nil {
-		return "", fmt.Errorf("Login: generando token: %w", err)
+		return nil, "", fmt.Errorf("Login: generando token: %w", err)
 	}
 
-	return token, nil
+	return user, token, nil
 }

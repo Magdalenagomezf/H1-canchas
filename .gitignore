@@ -1,5 +1,6 @@
-.env
-*.exe
-tmp/
-vendor/
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
 resumen_inicio_proyecto_h1_canchas.docx

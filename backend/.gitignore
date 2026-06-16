@@ -1,0 +1,5 @@
+.env
+*.exe
+tmp/
+vendor/
+h1-canchas

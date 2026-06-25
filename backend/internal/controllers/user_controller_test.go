@@ -1,0 +1,204 @@
+package controllers
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"H1-canchas/internal/domain"
+	"H1-canchas/internal/service"
+
+	"github.com/gin-gonic/gin"
+)
+
+func init() {
+	gin.SetMode(gin.TestMode)
+}
+
+// mockUserService implements userServiceI for controller tests.
+type mockUserService struct {
+	registerFn    func(ctx context.Context, name, phone, password string, email *string) (*domain.User, string, error)
+	createStaffFn func(ctx context.Context, name, phone, password, role string, email *string) (int64, error)
+	loginFn       func(ctx context.Context, phone, password string) (*domain.User, string, error)
+}
+
+func (m *mockUserService) Register(ctx context.Context, name, phone, password string, email *string) (*domain.User, string, error) {
+	if m.registerFn != nil {
+		return m.registerFn(ctx, name, phone, password, email)
+	}
+	return &domain.User{ID: 1, Name: name, Phone: phone, Role: domain.RoleCustomer}, "tok", nil
+}
+
+func (m *mockUserService) CreateStaff(ctx context.Context, name, phone, password, role string, email *string) (int64, error) {
+	if m.createStaffFn != nil {
+		return m.createStaffFn(ctx, name, phone, password, role, email)
+	}
+	return 1, nil
+}
+
+func (m *mockUserService) Login(ctx context.Context, phone, password string) (*domain.User, string, error) {
+	if m.loginFn != nil {
+		return m.loginFn(ctx, phone, password)
+	}
+	return &domain.User{ID: 1, Phone: phone, Role: domain.RoleCustomer}, "tok", nil
+}
+
+func newAuthRouter(svc userServiceI) *gin.Engine {
+	r := gin.New()
+	ctrl := NewAuthController(svc)
+	r.POST("/auth/register", ctrl.Register)
+	r.POST("/auth/login", ctrl.Login)
+	r.POST("/admin/users", ctrl.CreateStaff)
+	return r
+}
+
+// --- Register ---
+
+func TestAuthController_Register_InvalidJSON(t *testing.T) {
+	r := newAuthRouter(&mockUserService{})
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/auth/register", bytes.NewBufferString(`{bad json}`)))
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("got %d, want 400", w.Code)
+	}
+}
+
+func TestAuthController_Register_PhoneConflict(t *testing.T) {
+	svc := &mockUserService{
+		registerFn: func(_ context.Context, _, _, _ string, _ *string) (*domain.User, string, error) {
+			return nil, "", service.ErrPhoneAlreadyExists
+		},
+	}
+	r := newAuthRouter(svc)
+	body, _ := json.Marshal(map[string]string{"name": "Juan", "phone": "123", "password": "secret1"})
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/auth/register", bytes.NewReader(body)))
+	if w.Code != http.StatusConflict {
+		t.Errorf("got %d, want 409", w.Code)
+	}
+}
+
+func TestAuthController_Register_Success(t *testing.T) {
+	svc := &mockUserService{
+		registerFn: func(_ context.Context, _, _, _ string, _ *string) (*domain.User, string, error) {
+			return &domain.User{ID: 5, Name: "Juan", Phone: "123", Role: domain.RoleCustomer}, "jwt-token", nil
+		},
+	}
+	r := newAuthRouter(svc)
+	body, _ := json.Marshal(map[string]string{"name": "Juan", "phone": "123", "password": "secret1"})
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/auth/register", bytes.NewReader(body)))
+	if w.Code != http.StatusCreated {
+		t.Errorf("got %d, want 201", w.Code)
+	}
+	var resp map[string]any
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	if resp["token"] != "jwt-token" {
+		t.Errorf("expected token in response, got %v", resp)
+	}
+}
+
+// --- Login ---
+
+func TestAuthController_Login_InvalidJSON(t *testing.T) {
+	r := newAuthRouter(&mockUserService{})
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/auth/login", bytes.NewBufferString(`{bad}`)))
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("got %d, want 400", w.Code)
+	}
+}
+
+func TestAuthController_Login_InvalidCredentials(t *testing.T) {
+	svc := &mockUserService{
+		loginFn: func(_ context.Context, _, _ string) (*domain.User, string, error) {
+			return nil, "", service.ErrInvalidCredentials
+		},
+	}
+	r := newAuthRouter(svc)
+	body, _ := json.Marshal(map[string]string{"phone": "123", "password": "wrong"})
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/auth/login", bytes.NewReader(body)))
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("got %d, want 401", w.Code)
+	}
+}
+
+func TestAuthController_Login_UserInactive(t *testing.T) {
+	svc := &mockUserService{
+		loginFn: func(_ context.Context, _, _ string) (*domain.User, string, error) {
+			return nil, "", service.ErrUserInactive
+		},
+	}
+	r := newAuthRouter(svc)
+	body, _ := json.Marshal(map[string]string{"phone": "123", "password": "secret1"})
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/auth/login", bytes.NewReader(body)))
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("got %d, want 401", w.Code)
+	}
+}
+
+func TestAuthController_Login_Success(t *testing.T) {
+	svc := &mockUserService{
+		loginFn: func(_ context.Context, _, _ string) (*domain.User, string, error) {
+			return &domain.User{ID: 1, Name: "Juan", Phone: "123", Role: domain.RoleCustomer}, "jwt-token", nil
+		},
+	}
+	r := newAuthRouter(svc)
+	body, _ := json.Marshal(map[string]string{"phone": "123", "password": "secret1"})
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/auth/login", bytes.NewReader(body)))
+	if w.Code != http.StatusOK {
+		t.Errorf("got %d, want 200", w.Code)
+	}
+	var resp map[string]any
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	if resp["token"] != "jwt-token" {
+		t.Errorf("expected token in response, got %v", resp)
+	}
+}
+
+// --- CreateStaff ---
+
+func TestAuthController_CreateStaff_InvalidJSON(t *testing.T) {
+	r := newAuthRouter(&mockUserService{})
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/admin/users", bytes.NewBufferString(`{bad}`)))
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("got %d, want 400", w.Code)
+	}
+}
+
+func TestAuthController_CreateStaff_InvalidRole(t *testing.T) {
+	svc := &mockUserService{
+		createStaffFn: func(_ context.Context, _, _, _, _ string, _ *string) (int64, error) {
+			return 0, service.ErrInvalidRole
+		},
+	}
+	r := newAuthRouter(svc)
+	body, _ := json.Marshal(map[string]string{"name": "Ana", "phone": "456", "password": "secret1", "role": "superadmin"})
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/admin/users", bytes.NewReader(body)))
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("got %d, want 400", w.Code)
+	}
+}
+
+func TestAuthController_CreateStaff_Success(t *testing.T) {
+	svc := &mockUserService{
+		createStaffFn: func(_ context.Context, _, _, _, _ string, _ *string) (int64, error) {
+			return 10, nil
+		},
+	}
+	r := newAuthRouter(svc)
+	body, _ := json.Marshal(map[string]string{"name": "Ana", "phone": "456", "password": "secret1", "role": "receptionist"})
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/admin/users", bytes.NewReader(body)))
+	if w.Code != http.StatusCreated {
+		t.Errorf("got %d, want 201", w.Code)
+	}
+}

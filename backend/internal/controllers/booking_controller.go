@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"context"
 	"errors"
 	"log"
 	"net/http"
@@ -14,11 +15,20 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type BookingController struct {
-	bookingService *service.BookingService
+type bookingServiceI interface {
+	Create(ctx context.Context, customerUserID int64, spaceID, slotID int64, date time.Time) (*domain.Booking, error)
+	CreateManual(ctx context.Context, createdBy int64, spaceID, slotID int64, date time.Time, customerName, customerPhone string) (*domain.Booking, error)
+	GetMyBookings(ctx context.Context, userID int64) ([]domain.BookingDetail, error)
+	GetAll(ctx context.Context, date *time.Time) ([]domain.BookingDetail, error)
+	Cancel(ctx context.Context, bookingID, requesterID int64, requesterRole string) error
+	GetByID(ctx context.Context, bookingID, requesterID int64, requesterRole string) (*domain.BookingDetail, error)
 }
 
-func NewBookingController(bookingService *service.BookingService) *BookingController {
+type BookingController struct {
+	bookingService bookingServiceI
+}
+
+func NewBookingController(bookingService bookingServiceI) *BookingController {
 	return &BookingController{bookingService: bookingService}
 }
 

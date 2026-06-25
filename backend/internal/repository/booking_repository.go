@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"H1-canchas/internal/domain"
+	"H1-canchas/pkg/database"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -23,7 +24,7 @@ func NewBookingRepository(db *sqlx.DB) *bookingRepo {
 
 // BeginTx abre una transacción nueva.
 // El service la maneja: hace commit si todo sale bien, rollback si algo falla.
-func (r *bookingRepo) BeginTx(ctx context.Context) (*sqlx.Tx, error) {
+func (r *bookingRepo) BeginTx(ctx context.Context) (database.Tx, error) {
 	return r.db.BeginTxx(ctx, nil)
 }
 
@@ -83,7 +84,7 @@ func (r *bookingRepo) SlotBelongsToSpace(ctx context.Context, spaceID, slotID in
 //
 // De todos modos, PostgreSQL sigue siendo la defensa final
 // gracias al índice unique_active_booking.
-func (r *bookingRepo) Create(ctx context.Context, tx *sqlx.Tx, b *domain.Booking) (int64, error) {
+func (r *bookingRepo) Create(ctx context.Context, tx database.Tx, b *domain.Booking) (int64, error) {
 	query := `
 		INSERT INTO bookings (
 			customer_user_id,

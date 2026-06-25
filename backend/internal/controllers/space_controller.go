@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strconv"
@@ -12,11 +13,21 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type SpaceController struct {
-	spaceService *service.SpaceService
+type spaceServiceI interface {
+	Create(ctx context.Context, name, spaceType string, description *string, pricePerSlot float64) (int64, error)
+	GetAll(ctx context.Context) ([]domain.Space, error)
+	GetByID(ctx context.Context, id int64) (*domain.Space, error)
+	GetSlots(ctx context.Context, spaceID int64) ([]domain.SpaceSlot, error)
+	CreateSlot(ctx context.Context, spaceID int64, label string, description *string, startTime, endTime *string) (int64, error)
+	Update(ctx context.Context, id int64, name string, description *string, pricePerSlot float64) error
+	Deactivate(ctx context.Context, id int64) error
 }
 
-func NewSpaceController(spaceService *service.SpaceService) *SpaceController {
+type SpaceController struct {
+	spaceService spaceServiceI
+}
+
+func NewSpaceController(spaceService spaceServiceI) *SpaceController {
 	return &SpaceController{spaceService: spaceService}
 }
 func (h *SpaceController) Create(c *gin.Context) {

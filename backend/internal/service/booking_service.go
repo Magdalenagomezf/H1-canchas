@@ -7,17 +7,16 @@ import (
 	"time"
 
 	"H1-canchas/internal/domain"
-
-	"github.com/jmoiron/sqlx"
+	"H1-canchas/pkg/database"
 )
 
 // BookingRepo es la interfaz que el service necesita.
 // La define el service, la implementa el repository.
 type BookingRepo interface {
-	BeginTx(ctx context.Context) (*sqlx.Tx, error)
+	BeginTx(ctx context.Context) (database.Tx, error)
 	ExistsActiveBooking(ctx context.Context, spaceID, slotID int64, date time.Time) (bool, error)
 	SlotBelongsToSpace(ctx context.Context, spaceID, slotID int64) (bool, error)
-	Create(ctx context.Context, tx *sqlx.Tx, b *domain.Booking) (int64, error)
+	Create(ctx context.Context, tx database.Tx, b *domain.Booking) (int64, error)
 	GetByID(ctx context.Context, id int64) (*domain.Booking, error)
 	UpdateStatus(ctx context.Context, id int64, status string) (bool, error)
 	GetAllWithDetails(ctx context.Context, userID *int64, date *time.Time) ([]domain.BookingDetail, error)

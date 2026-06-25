@@ -1,22 +1,31 @@
 package controllers
 
 import (
-	"H1-canchas/internal/dto"
-	"H1-canchas/internal/service"
+	"context"
 	"errors"
 	"log"
 	"net/http"
 
+	"H1-canchas/internal/domain"
+	"H1-canchas/internal/dto"
+	"H1-canchas/internal/service"
+
 	"github.com/gin-gonic/gin"
 )
+
+type userServiceI interface {
+	Register(ctx context.Context, name, phone, password string, email *string) (*domain.User, string, error)
+	CreateStaff(ctx context.Context, name, phone, password, role string, email *string) (int64, error)
+	Login(ctx context.Context, phone, password string) (*domain.User, string, error)
+}
 
 // AuthController maneja los endpoints de autenticación.
 // Solo conoce el service, nunca el repository ni la BD.
 type AuthController struct {
-	userService *service.UserService
+	userService userServiceI
 }
 
-func NewAuthController(userService *service.UserService) *AuthController {
+func NewAuthController(userService userServiceI) *AuthController {
 	return &AuthController{userService: userService}
 }
 

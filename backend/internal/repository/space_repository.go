@@ -96,6 +96,29 @@ func (r *spaceRepo) GetSlotsBySpaceID(ctx context.Context, spaceID int64) ([]dom
 	return slots, nil
 }
 
+func (r *spaceRepo) GetAvailableSlotsForDate(ctx context.Context, spaceID int64, date string) ([]domain.SpaceSlot, error) {
+	query := `
+        SELECT ss.id, ss.space_id, ss.label, ss.description, ss.start_time, ss.end_time, ss.is_active
+        FROM space_slots ss
+        WHERE ss.space_id = $1
+          AND ss.is_active = true
+          AND NOT EXISTS (
+              SELECT 1 FROM bookings b
+              WHERE b.space_id = ss.space_id
+                AND b.slot_id = ss.id
+                AND b.booking_date = $2::date
+                AND b.status IN ('pending', 'confirmed')
+          )
+        ORDER BY ss.start_time`
+
+	var slots []domain.SpaceSlot
+	err := r.db.SelectContext(ctx, &slots, query, spaceID, date)
+	if err != nil {
+		return nil, fmt.Errorf("spaceRepo.GetAvailableSlotsForDate: %w", err)
+	}
+	return slots, nil
+}
+
 func (r *spaceRepo) CreateSlot(ctx context.Context, slot *domain.SpaceSlot) (int64, error) {
 	query := `
 		INSERT INTO space_slots (space_id, label, description, start_time, end_time)
@@ -127,6 +150,34 @@ func (r *spaceRepo) Update(ctx context.Context, id int64, name string, descripti
 		return fmt.Errorf("spaceRepo.Update: %w", err)
 	}
 	return nil
+}
+
+func (r *spaceRepo) HasBookings(ctx context.Context, id int64) (bool, error) {
+	var exists bool
+	err := r.db.QueryRowContext(ctx,
+		`SELECT EXISTS(SELECT 1 FROM bookings WHERE space_id = $1 LIMIT 1)`, id,
+	).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("spaceRepo.HasBookings: %w", err)
+	}
+	return exists, nil
+}
+
+func (r *spaceRepo) HardDelete(ctx context.Context, id int64) error {
+	tx, err := r.db.BeginTxx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("spaceRepo.HardDelete: begin tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.ExecContext(ctx, `DELETE FROM space_slots WHERE space_id = $1`, id); err != nil {
+		return fmt.Errorf("spaceRepo.HardDelete: delete slots: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM spaces WHERE id = $1`, id); err != nil {
+		return fmt.Errorf("spaceRepo.HardDelete: delete space: %w", err)
+	}
+
+	return tx.Commit()
 }
 
 // desactiva un espacio

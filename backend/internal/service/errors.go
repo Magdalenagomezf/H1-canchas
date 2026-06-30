@@ -34,4 +34,9 @@ var (
 	ErrInvalidBookingID        = errors.New("id de reserva inválido")
 	ErrInvalidSlotID           = errors.New("id de slot inválido")
 	ErrInvalidBookingDate      = errors.New("fecha de reserva inválida")
+
+	// delete guards
+	ErrUserHasBookings  = errors.New("el usuario tiene reservas asociadas y no puede eliminarse")
+	ErrSpaceHasBookings = errors.New("el espacio tiene reservas asociadas y no puede eliminarse")
+	ErrCannotDeleteSelf = errors.New("no podés eliminar tu propia cuenta")
 )

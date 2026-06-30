@@ -38,3 +38,8 @@ type AuthResponse struct {
 	Token string       `json:"token"`
 	User  UserResponse `json:"user"`
 }
+
+// UpdateRoleRequest es el JSON para cambiar el rol de un usuario.
+type UpdateRoleRequest struct {
+	Role string `json:"role" binding:"required"`
+}

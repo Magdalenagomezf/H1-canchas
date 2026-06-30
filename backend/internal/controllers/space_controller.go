@@ -17,10 +17,11 @@ type spaceServiceI interface {
 	Create(ctx context.Context, name, spaceType string, description *string, pricePerSlot float64) (int64, error)
 	GetAll(ctx context.Context) ([]domain.Space, error)
 	GetByID(ctx context.Context, id int64) (*domain.Space, error)
-	GetSlots(ctx context.Context, spaceID int64) ([]domain.SpaceSlot, error)
+	GetSlots(ctx context.Context, spaceID int64, date string) ([]domain.SpaceSlot, error)
 	CreateSlot(ctx context.Context, spaceID int64, label string, description *string, startTime, endTime *string) (int64, error)
 	Update(ctx context.Context, id int64, name string, description *string, pricePerSlot float64) error
 	Deactivate(ctx context.Context, id int64) error
+	HardDelete(ctx context.Context, id int64) error
 }
 
 type SpaceController struct {
@@ -109,7 +110,7 @@ func (h *SpaceController) GetByID(c *gin.Context) {
 }
 
 // GetSlots godoc
-// GET /spaces/:id/slots
+// GET /spaces/:id/slots?date=YYYY-MM-DD
 func (h *SpaceController) GetSlots(c *gin.Context) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil || id <= 0 {
@@ -117,7 +118,8 @@ func (h *SpaceController) GetSlots(c *gin.Context) {
 		return
 	}
 
-	slots, err := h.spaceService.GetSlots(c.Request.Context(), id)
+	date := c.Query("date")
+	slots, err := h.spaceService.GetSlots(c.Request.Context(), id, date)
 	if err != nil {
 		if errors.Is(err, service.ErrInvalidSpaceID) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -221,6 +223,31 @@ func (h *SpaceController) Deactivate(c *gin.Context) {
 		}
 
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "error interno"})
+		return
+	}
+
+	c.Status(http.StatusNoContent)
+}
+
+// HardDelete godoc — DELETE /admin/spaces/:id
+func (h *SpaceController) HardDelete(c *gin.Context) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || id <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "id inválido"})
+		return
+	}
+
+	if err := h.spaceService.HardDelete(c.Request.Context(), id); err != nil {
+		switch {
+		case errors.Is(err, service.ErrInvalidSpaceID):
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		case errors.Is(err, service.ErrNotFound):
+			c.JSON(http.StatusNotFound, gin.H{"error": "espacio no encontrado"})
+		case errors.Is(err, service.ErrSpaceHasBookings):
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "error interno"})
+		}
 		return
 	}
 

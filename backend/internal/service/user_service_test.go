@@ -13,9 +13,13 @@ import (
 
 // mockUserRepo implements UserRepo for unit tests.
 type mockUserRepo struct {
-	createFn      func(ctx context.Context, user *domain.User) (int64, error)
-	findByPhoneFn func(ctx context.Context, phone string) (*domain.User, error)
-	findByIDFn    func(ctx context.Context, id int64) (*domain.User, error)
+	createFn       func(ctx context.Context, user *domain.User) (int64, error)
+	findByPhoneFn  func(ctx context.Context, phone string) (*domain.User, error)
+	findByIDFn     func(ctx context.Context, id int64) (*domain.User, error)
+	getAllFn        func(ctx context.Context) ([]domain.User, error)
+	updateRoleFn   func(ctx context.Context, id int64, role string) error
+	hasBookingsFn  func(ctx context.Context, id int64) (bool, error)
+	deleteFn       func(ctx context.Context, id int64) error
 }
 
 func (m *mockUserRepo) Create(ctx context.Context, user *domain.User) (int64, error) {
@@ -37,6 +41,34 @@ func (m *mockUserRepo) FindByID(ctx context.Context, id int64) (*domain.User, er
 		return m.findByIDFn(ctx, id)
 	}
 	return nil, nil
+}
+
+func (m *mockUserRepo) GetAll(ctx context.Context) ([]domain.User, error) {
+	if m.getAllFn != nil {
+		return m.getAllFn(ctx)
+	}
+	return nil, nil
+}
+
+func (m *mockUserRepo) UpdateRole(ctx context.Context, id int64, role string) error {
+	if m.updateRoleFn != nil {
+		return m.updateRoleFn(ctx, id, role)
+	}
+	return nil
+}
+
+func (m *mockUserRepo) HasBookings(ctx context.Context, id int64) (bool, error) {
+	if m.hasBookingsFn != nil {
+		return m.hasBookingsFn(ctx, id)
+	}
+	return false, nil
+}
+
+func (m *mockUserRepo) Delete(ctx context.Context, id int64) error {
+	if m.deleteFn != nil {
+		return m.deleteFn(ctx, id)
+	}
+	return nil
 }
 
 func newUserSvc(repo *mockUserRepo) *UserService {

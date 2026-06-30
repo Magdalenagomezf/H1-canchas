@@ -18,6 +18,10 @@ type UserRepo interface {
 	Create(ctx context.Context, user *domain.User) (int64, error)
 	FindByPhone(ctx context.Context, phone string) (*domain.User, error)
 	FindByID(ctx context.Context, id int64) (*domain.User, error)
+	GetAll(ctx context.Context) ([]domain.User, error)
+	UpdateRole(ctx context.Context, id int64, role string) error
+	HasBookings(ctx context.Context, id int64) (bool, error)
+	Delete(ctx context.Context, id int64) error
 }
 
 type UserService struct {
@@ -158,6 +162,48 @@ func (s *UserService) CreateStaff(ctx context.Context, name, phone, password, ro
 	}
 
 	return id, nil
+}
+
+func (s *UserService) ListUsers(ctx context.Context) ([]domain.User, error) {
+	return s.repo.GetAll(ctx)
+}
+
+func (s *UserService) UpdateRole(ctx context.Context, id int64, newRole string) error {
+	if newRole != domain.RoleCustomer && newRole != domain.RoleReceptionist && newRole != domain.RoleAdmin {
+		return ErrInvalidRole
+	}
+	user, err := s.repo.FindByID(ctx, id)
+	if err != nil {
+		return fmt.Errorf("UpdateRole: %w", err)
+	}
+	if user == nil {
+		return ErrNotFound
+	}
+	return s.repo.UpdateRole(ctx, id, newRole)
+}
+
+func (s *UserService) DeleteUser(ctx context.Context, targetID, requesterID int64) error {
+	if targetID == requesterID {
+		return ErrCannotDeleteSelf
+	}
+
+	user, err := s.repo.FindByID(ctx, targetID)
+	if err != nil {
+		return fmt.Errorf("DeleteUser: %w", err)
+	}
+	if user == nil {
+		return ErrNotFound
+	}
+
+	hasBookings, err := s.repo.HasBookings(ctx, targetID)
+	if err != nil {
+		return fmt.Errorf("DeleteUser: %w", err)
+	}
+	if hasBookings {
+		return ErrUserHasBookings
+	}
+
+	return s.repo.Delete(ctx, targetID)
 }
 
 // Login valida las credenciales y devuelve el usuario y un JWT si son correctas.

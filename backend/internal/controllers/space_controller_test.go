@@ -19,10 +19,11 @@ type mockSpaceService struct {
 	createFn     func(ctx context.Context, name, spaceType string, description *string, pricePerSlot float64) (int64, error)
 	getAllFn      func(ctx context.Context) ([]domain.Space, error)
 	getByIDFn    func(ctx context.Context, id int64) (*domain.Space, error)
-	getSlotsFn   func(ctx context.Context, spaceID int64) ([]domain.SpaceSlot, error)
+	getSlotsFn   func(ctx context.Context, spaceID int64, date string) ([]domain.SpaceSlot, error)
 	createSlotFn func(ctx context.Context, spaceID int64, label string, description *string, startTime, endTime *string) (int64, error)
 	updateFn     func(ctx context.Context, id int64, name string, description *string, pricePerSlot float64) error
 	deactivateFn func(ctx context.Context, id int64) error
+	hardDeleteFn func(ctx context.Context, id int64) error
 }
 
 func (m *mockSpaceService) Create(ctx context.Context, name, spaceType string, description *string, pricePerSlot float64) (int64, error) {
@@ -43,9 +44,9 @@ func (m *mockSpaceService) GetByID(ctx context.Context, id int64) (*domain.Space
 	}
 	return nil, nil
 }
-func (m *mockSpaceService) GetSlots(ctx context.Context, spaceID int64) ([]domain.SpaceSlot, error) {
+func (m *mockSpaceService) GetSlots(ctx context.Context, spaceID int64, date string) ([]domain.SpaceSlot, error) {
 	if m.getSlotsFn != nil {
-		return m.getSlotsFn(ctx, spaceID)
+		return m.getSlotsFn(ctx, spaceID, date)
 	}
 	return nil, nil
 }
@@ -64,6 +65,13 @@ func (m *mockSpaceService) Update(ctx context.Context, id int64, name string, de
 func (m *mockSpaceService) Deactivate(ctx context.Context, id int64) error {
 	if m.deactivateFn != nil {
 		return m.deactivateFn(ctx, id)
+	}
+	return nil
+}
+
+func (m *mockSpaceService) HardDelete(ctx context.Context, id int64) error {
+	if m.hardDeleteFn != nil {
+		return m.hardDeleteFn(ctx, id)
 	}
 	return nil
 }

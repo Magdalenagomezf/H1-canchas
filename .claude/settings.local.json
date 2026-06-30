@@ -3,7 +3,9 @@
     "allow": [
       "Bash(Get-ChildItem -Path \"d:\\\\Magdi\\\\H1-canchas\" -Recurse -Directory)",
       "Bash(Select-Object -First 20)",
-      "Bash(Format-Table FullName)"
+      "Bash(Format-Table FullName)",
+      "mcp__plugin_engram_engram__mem_context",
+      "mcp__plugin_engram_engram__mem_search"
     ]
   }
 }

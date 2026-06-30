@@ -11,13 +11,16 @@ import (
 // mockSpaceRepo is a test double for SpaceRepo.
 // Each field is a function so each test can inject the behavior it needs.
 type mockSpaceRepo struct {
-	createFn            func(ctx context.Context, space *domain.Space) (int64, error)
-	getAllFn             func(ctx context.Context) ([]domain.Space, error)
-	getByIDFn           func(ctx context.Context, id int64) (*domain.Space, error)
-	getSlotsBySpaceIDFn func(ctx context.Context, spaceID int64) ([]domain.SpaceSlot, error)
-	updateFn            func(ctx context.Context, id int64, name string, description *string, pricePerSlot float64) error
-	createSlotFn        func(ctx context.Context, slot *domain.SpaceSlot) (int64, error)
-	deactivateFn        func(ctx context.Context, id int64) error
+	createFn                    func(ctx context.Context, space *domain.Space) (int64, error)
+	getAllFn                     func(ctx context.Context) ([]domain.Space, error)
+	getByIDFn                   func(ctx context.Context, id int64) (*domain.Space, error)
+	getSlotsBySpaceIDFn         func(ctx context.Context, spaceID int64) ([]domain.SpaceSlot, error)
+	getAvailableSlotsForDateFn  func(ctx context.Context, spaceID int64, date string) ([]domain.SpaceSlot, error)
+	updateFn                    func(ctx context.Context, id int64, name string, description *string, pricePerSlot float64) error
+	createSlotFn                func(ctx context.Context, slot *domain.SpaceSlot) (int64, error)
+	deactivateFn                func(ctx context.Context, id int64) error
+	hasBookingsFn               func(ctx context.Context, id int64) (bool, error)
+	hardDeleteFn                func(ctx context.Context, id int64) error
 }
 
 func (m *mockSpaceRepo) Create(ctx context.Context, space *domain.Space) (int64, error) {
@@ -48,6 +51,13 @@ func (m *mockSpaceRepo) GetSlotsBySpaceID(ctx context.Context, spaceID int64) ([
 	return nil, nil
 }
 
+func (m *mockSpaceRepo) GetAvailableSlotsForDate(ctx context.Context, spaceID int64, date string) ([]domain.SpaceSlot, error) {
+	if m.getAvailableSlotsForDateFn != nil {
+		return m.getAvailableSlotsForDateFn(ctx, spaceID, date)
+	}
+	return nil, nil
+}
+
 func (m *mockSpaceRepo) Update(ctx context.Context, id int64, name string, description *string, pricePerSlot float64) error {
 	if m.updateFn != nil {
 		return m.updateFn(ctx, id, name, description, pricePerSlot)
@@ -65,6 +75,20 @@ func (m *mockSpaceRepo) CreateSlot(ctx context.Context, slot *domain.SpaceSlot) 
 func (m *mockSpaceRepo) Deactivate(ctx context.Context, id int64) error {
 	if m.deactivateFn != nil {
 		return m.deactivateFn(ctx, id)
+	}
+	return nil
+}
+
+func (m *mockSpaceRepo) HasBookings(ctx context.Context, id int64) (bool, error) {
+	if m.hasBookingsFn != nil {
+		return m.hasBookingsFn(ctx, id)
+	}
+	return false, nil
+}
+
+func (m *mockSpaceRepo) HardDelete(ctx context.Context, id int64) error {
+	if m.hardDeleteFn != nil {
+		return m.hardDeleteFn(ctx, id)
 	}
 	return nil
 }
@@ -185,7 +209,7 @@ func TestSpaceService_GetByID_Success(t *testing.T) {
 
 func TestSpaceService_GetSlots_InvalidID(t *testing.T) {
 	svc := NewSpaceService(&mockSpaceRepo{})
-	_, err := svc.GetSlots(context.Background(), 0)
+	_, err := svc.GetSlots(context.Background(), 0, "")
 	if !errors.Is(err, ErrInvalidSpaceID) {
 		t.Errorf("got %v, want ErrInvalidSpaceID", err)
 	}
@@ -197,7 +221,7 @@ func TestSpaceService_GetSlots_SpaceNotFound(t *testing.T) {
 	}
 	svc := NewSpaceService(repo)
 
-	_, err := svc.GetSlots(context.Background(), 1)
+	_, err := svc.GetSlots(context.Background(), 1, "")
 	if !errors.Is(err, ErrNotFound) {
 		t.Errorf("got %v, want ErrNotFound", err)
 	}
@@ -211,11 +235,30 @@ func TestSpaceService_GetSlots_Success(t *testing.T) {
 	}
 	svc := NewSpaceService(repo)
 
-	slots, err := svc.GetSlots(context.Background(), 1)
+	slots, err := svc.GetSlots(context.Background(), 1, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if len(slots) != 1 || slots[0].ID != 10 {
+		t.Errorf("unexpected slots: %+v", slots)
+	}
+}
+
+func TestSpaceService_GetSlots_FiltersByDate(t *testing.T) {
+	available := []domain.SpaceSlot{{ID: 20, SpaceID: 1, Label: "Tarde"}}
+	repo := &mockSpaceRepo{
+		getByIDFn: func(_ context.Context, _ int64) (*domain.Space, error) { return activeSpace(), nil },
+		getAvailableSlotsForDateFn: func(_ context.Context, _ int64, _ string) ([]domain.SpaceSlot, error) {
+			return available, nil
+		},
+	}
+	svc := NewSpaceService(repo)
+
+	slots, err := svc.GetSlots(context.Background(), 1, "2025-12-25")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(slots) != 1 || slots[0].ID != 20 {
 		t.Errorf("unexpected slots: %+v", slots)
 	}
 }

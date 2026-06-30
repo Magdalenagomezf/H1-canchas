@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Box from '@mui/material/Box';
 import Container from '@mui/material/Container';
 import Typography from '@mui/material/Typography';
@@ -32,6 +32,8 @@ const today = new Date().toISOString().split('T')[0];
 export default function SpaceDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const queryClient = useQueryClient();
   const { isAuthenticated } = useAuth();
 
   const [date, setDate] = useState('');
@@ -48,15 +50,17 @@ export default function SpaceDetailPage() {
   });
 
   const { data: slots, isLoading: loadingSlots } = useQuery({
-    queryKey: ['slots', spaceId],
-    queryFn: () => getSlots(spaceId),
-    enabled: !!spaceId,
+    queryKey: ['slots', spaceId, date],
+    queryFn: () => getSlots(spaceId, date),
+    enabled: !!spaceId && !!date,
   });
 
   const bookMutation = useMutation({
     mutationFn: (slotId: number) =>
       createBooking({ space_id: spaceId, slot_id: slotId, booking_date: date }),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['my-bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['slots', spaceId, date] });
       setSelectedSlot(null);
       setSuccessOpen(true);
       setTimeout(() => navigate('/mis-reservas'), 1800);
@@ -71,7 +75,7 @@ export default function SpaceDetailPage() {
 
   const handleBook = (slot: SpaceSlot) => {
     if (!isAuthenticated) {
-      navigate('/login');
+      navigate('/login', { state: { from: location } });
       return;
     }
     setSelectedSlot(slot);

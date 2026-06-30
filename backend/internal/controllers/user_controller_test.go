@@ -23,6 +23,9 @@ type mockUserService struct {
 	registerFn    func(ctx context.Context, name, phone, password string, email *string) (*domain.User, string, error)
 	createStaffFn func(ctx context.Context, name, phone, password, role string, email *string) (int64, error)
 	loginFn       func(ctx context.Context, phone, password string) (*domain.User, string, error)
+	listUsersFn   func(ctx context.Context) ([]domain.User, error)
+	updateRoleFn  func(ctx context.Context, id int64, newRole string) error
+	deleteUserFn  func(ctx context.Context, targetID, requesterID int64) error
 }
 
 func (m *mockUserService) Register(ctx context.Context, name, phone, password string, email *string) (*domain.User, string, error) {
@@ -44,6 +47,27 @@ func (m *mockUserService) Login(ctx context.Context, phone, password string) (*d
 		return m.loginFn(ctx, phone, password)
 	}
 	return &domain.User{ID: 1, Phone: phone, Role: domain.RoleCustomer}, "tok", nil
+}
+
+func (m *mockUserService) ListUsers(ctx context.Context) ([]domain.User, error) {
+	if m.listUsersFn != nil {
+		return m.listUsersFn(ctx)
+	}
+	return nil, nil
+}
+
+func (m *mockUserService) UpdateRole(ctx context.Context, id int64, newRole string) error {
+	if m.updateRoleFn != nil {
+		return m.updateRoleFn(ctx, id, newRole)
+	}
+	return nil
+}
+
+func (m *mockUserService) DeleteUser(ctx context.Context, targetID, requesterID int64) error {
+	if m.deleteUserFn != nil {
+		return m.deleteUserFn(ctx, targetID, requesterID)
+	}
+	return nil
 }
 
 func newAuthRouter(svc userServiceI) *gin.Engine {

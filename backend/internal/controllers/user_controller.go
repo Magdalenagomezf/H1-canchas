@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"strconv"
 
 	"H1-canchas/internal/domain"
 	"H1-canchas/internal/dto"
@@ -17,6 +18,9 @@ type userServiceI interface {
 	Register(ctx context.Context, name, phone, password string, email *string) (*domain.User, string, error)
 	CreateStaff(ctx context.Context, name, phone, password, role string, email *string) (int64, error)
 	Login(ctx context.Context, phone, password string) (*domain.User, string, error)
+	ListUsers(ctx context.Context) ([]domain.User, error)
+	UpdateRole(ctx context.Context, id int64, newRole string) error
+	DeleteUser(ctx context.Context, targetID, requesterID int64) error
 }
 
 // AuthController maneja los endpoints de autenticación.
@@ -93,6 +97,80 @@ func (h *AuthController) CreateStaff(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, gin.H{"id": id})
+}
+
+// ListUsers godoc — GET /admin/users
+func (h *AuthController) ListUsers(c *gin.Context) {
+	users, err := h.userService.ListUsers(c.Request.Context())
+	if err != nil {
+		log.Printf("ListUsers error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "error interno"})
+		return
+	}
+
+	resp := make([]dto.UserResponse, len(users))
+	for i, u := range users {
+		resp[i] = dto.UserResponse{ID: u.ID, Name: u.Name, Phone: u.Phone, Role: u.Role}
+	}
+	c.JSON(http.StatusOK, resp)
+}
+
+// UpdateRole godoc — PATCH /admin/users/:id/role
+func (h *AuthController) UpdateRole(c *gin.Context) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "id inválido"})
+		return
+	}
+
+	var req dto.UpdateRoleRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "payload inválido: " + err.Error()})
+		return
+	}
+
+	if err := h.userService.UpdateRole(c.Request.Context(), id, req.Role); err != nil {
+		switch {
+		case errors.Is(err, service.ErrInvalidRole):
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		case errors.Is(err, service.ErrNotFound):
+			c.JSON(http.StatusNotFound, gin.H{"error": "usuario no encontrado"})
+		default:
+			log.Printf("UpdateRole error: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "error interno"})
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "rol actualizado"})
+}
+
+// DeleteUser godoc — DELETE /admin/users/:id
+func (h *AuthController) DeleteUser(c *gin.Context) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "id inválido"})
+		return
+	}
+
+	requesterID := c.GetInt64("user_id")
+
+	if err := h.userService.DeleteUser(c.Request.Context(), id, requesterID); err != nil {
+		switch {
+		case errors.Is(err, service.ErrCannotDeleteSelf):
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		case errors.Is(err, service.ErrNotFound):
+			c.JSON(http.StatusNotFound, gin.H{"error": "usuario no encontrado"})
+		case errors.Is(err, service.ErrUserHasBookings):
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		default:
+			log.Printf("DeleteUser error: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "error interno"})
+		}
+		return
+	}
+
+	c.Status(http.StatusNoContent)
 }
 
 // Login godoc

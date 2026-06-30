@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../hooks/useAuth';
 import Box from '@mui/material/Box';
 import Container from '@mui/material/Container';
 import Typography from '@mui/material/Typography';
@@ -37,6 +38,7 @@ const STEPS = [
 
 export default function HomePage() {
   const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
   const { data: spaces, isLoading } = useQuery({ queryKey: ['spaces'], queryFn: getSpaces });
 
   return (
@@ -140,23 +142,25 @@ export default function HomePage() {
               >
                 Ver canchas
               </MotionButton>
-              <MotionButton
-                variant="outlined"
-                size="large"
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.97 }}
-                onClick={() => navigate('/login')}
-                sx={{
-                  borderColor: 'rgba(255,255,255,0.6)',
-                  color: '#fff',
-                  px: 4,
-                  py: 1.5,
-                  fontSize: '1rem',
-                  '&:hover': { borderColor: '#fff', bgcolor: 'rgba(255,255,255,0.08)' },
-                }}
-              >
-                Registrarme
-              </MotionButton>
+              {!isAuthenticated && (
+                <MotionButton
+                  variant="outlined"
+                  size="large"
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.97 }}
+                  onClick={() => navigate('/login', { state: { tab: 'register' } })}
+                  sx={{
+                    borderColor: 'rgba(255,255,255,0.6)',
+                    color: '#fff',
+                    px: 4,
+                    py: 1.5,
+                    fontSize: '1rem',
+                    '&:hover': { borderColor: '#fff', bgcolor: 'rgba(255,255,255,0.08)' },
+                  }}
+                >
+                  Registrarme
+                </MotionButton>
+              )}
             </Box>
           </MotionBox>
         </Container>
@@ -253,51 +257,53 @@ export default function HomePage() {
         </Container>
       </Box>
 
-      {/* CTA banner */}
-      <Box
-        sx={{
-          background: 'linear-gradient(135deg, #7B5E3A, #5C4429)',
-          py: { xs: 7, md: 10 },
-          textAlign: 'center',
-        }}
-      >
-        <Container maxWidth="sm">
-          <MotionBox
-            initial={{ opacity: 0, scale: 0.96 }}
-            whileInView={{ opacity: 1, scale: 1 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.5 }}
-          >
-            <Typography
-              variant="h2"
-              sx={{ color: '#fff', fontSize: { xs: '1.8rem', md: '2.4rem' }, mb: 2 }}
+      {/* CTA banner — only for unauthenticated users */}
+      {!isAuthenticated && (
+        <Box
+          sx={{
+            background: 'linear-gradient(135deg, #7B5E3A, #5C4429)',
+            py: { xs: 7, md: 10 },
+            textAlign: 'center',
+          }}
+        >
+          <Container maxWidth="sm">
+            <MotionBox
+              initial={{ opacity: 0, scale: 0.96 }}
+              whileInView={{ opacity: 1, scale: 1 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5 }}
             >
-              ¿Listo para jugar?
-            </Typography>
-            <Typography sx={{ color: 'rgba(255,255,255,0.8)', mb: 4, fontSize: '1rem' }}>
-              Creá tu cuenta gratis y empezá a reservar hoy mismo.
-            </Typography>
-            <MotionButton
-              variant="contained"
-              size="large"
-              whileHover={{ scale: 1.06 }}
-              whileTap={{ scale: 0.97 }}
-              onClick={() => navigate('/login')}
-              sx={{
-                bgcolor: '#fff',
-                color: 'secondary.dark',
-                px: 5,
-                py: 1.5,
-                fontSize: '1rem',
-                fontWeight: 700,
-                '&:hover': { bgcolor: '#f5f5f0' },
-              }}
-            >
-              Crear cuenta
-            </MotionButton>
-          </MotionBox>
-        </Container>
-      </Box>
+              <Typography
+                variant="h2"
+                sx={{ color: '#fff', fontSize: { xs: '1.8rem', md: '2.4rem' }, mb: 2 }}
+              >
+                ¿Listo para jugar?
+              </Typography>
+              <Typography sx={{ color: 'rgba(255,255,255,0.8)', mb: 4, fontSize: '1rem' }}>
+                Creá tu cuenta gratis y empezá a reservar hoy mismo.
+              </Typography>
+              <MotionButton
+                variant="contained"
+                size="large"
+                whileHover={{ scale: 1.06 }}
+                whileTap={{ scale: 0.97 }}
+                onClick={() => navigate('/login')}
+                sx={{
+                  bgcolor: '#fff',
+                  color: 'secondary.dark',
+                  px: 5,
+                  py: 1.5,
+                  fontSize: '1rem',
+                  fontWeight: 700,
+                  '&:hover': { bgcolor: '#f5f5f0' },
+                }}
+              >
+                Crear cuenta
+              </MotionButton>
+            </MotionBox>
+          </Container>
+        </Box>
+      )}
 
       {/* Footer */}
       <Box

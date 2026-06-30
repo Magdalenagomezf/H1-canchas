@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
 import type { User } from '../types';
+import queryClient from '../lib/queryClient';
 
 interface AuthContextValue {
   user: User | null;
@@ -13,7 +14,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 function getStoredUser(): User | null {
   try {
-    const raw = localStorage.getItem('user');
+    const raw = sessionStorage.getItem('user');
     return raw ? (JSON.parse(raw) as User) : null;
   } catch {
     return null;
@@ -22,18 +23,19 @@ function getStoredUser(): User | null {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(getStoredUser);
-  const [token, setToken] = useState<string | null>(() => localStorage.getItem('token'));
+  const [token, setToken] = useState<string | null>(() => sessionStorage.getItem('token'));
 
   const setAuth = useCallback((newUser: User, newToken: string) => {
-    localStorage.setItem('token', newToken);
-    localStorage.setItem('user', JSON.stringify(newUser));
+    sessionStorage.setItem('token', newToken);
+    sessionStorage.setItem('user', JSON.stringify(newUser));
     setUser(newUser);
     setToken(newToken);
   }, []);
 
   const logout = useCallback(() => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    sessionStorage.removeItem('token');
+    sessionStorage.removeItem('user');
+    queryClient.clear();
     setUser(null);
     setToken(null);
   }, []);

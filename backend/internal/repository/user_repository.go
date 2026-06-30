@@ -78,3 +78,41 @@ func (r *userRepo) FindByID(ctx context.Context, id int64) (*domain.User, error)
 	}
 	return &user, nil
 }
+
+func (r *userRepo) GetAll(ctx context.Context) ([]domain.User, error) {
+	var users []domain.User
+	err := r.db.SelectContext(ctx, &users, `
+        SELECT id, name, email, phone, password_hash, role, is_active, created_at
+        FROM users ORDER BY created_at DESC`)
+	if err != nil {
+		return nil, fmt.Errorf("userRepo.GetAll: %w", err)
+	}
+	return users, nil
+}
+
+func (r *userRepo) UpdateRole(ctx context.Context, id int64, role string) error {
+	_, err := r.db.ExecContext(ctx, `UPDATE users SET role = $1 WHERE id = $2`, role, id)
+	if err != nil {
+		return fmt.Errorf("userRepo.UpdateRole: %w", err)
+	}
+	return nil
+}
+
+func (r *userRepo) HasBookings(ctx context.Context, id int64) (bool, error) {
+	var exists bool
+	err := r.db.QueryRowContext(ctx,
+		`SELECT EXISTS(SELECT 1 FROM bookings WHERE customer_user_id = $1 OR created_by = $1 LIMIT 1)`, id,
+	).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("userRepo.HasBookings: %w", err)
+	}
+	return exists, nil
+}
+
+func (r *userRepo) Delete(ctx context.Context, id int64) error {
+	_, err := r.db.ExecContext(ctx, `DELETE FROM users WHERE id = $1`, id)
+	if err != nil {
+		return fmt.Errorf("userRepo.Delete: %w", err)
+	}
+	return nil
+}

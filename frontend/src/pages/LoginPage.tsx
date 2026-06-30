@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
+import type { Location } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
 import Box from '@mui/material/Box';
 import Card from '@mui/material/Card';
@@ -22,9 +23,13 @@ const MotionCard = motion(Card);
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { setAuth } = useAuth();
 
-  const [tab, setTab] = useState<0 | 1>(0); // 0 = login, 1 = register
+  const state = location.state as { from?: Location; tab?: string } | null;
+  const redirectTo = state?.from ? state.from.pathname + (state.from.search ?? '') : '/';
+
+  const [tab, setTab] = useState<0 | 1>(state?.tab === 'register' ? 1 : 0);
   const [showPassword, setShowPassword] = useState(false);
 
   const [loginForm, setLoginForm] = useState({ phone: '', password: '' });
@@ -34,7 +39,7 @@ export default function LoginPage() {
     mutationFn: () => login(loginForm.phone, loginForm.password),
     onSuccess: (data) => {
       setAuth(data.user, data.token);
-      navigate('/');
+      navigate(redirectTo, { replace: true });
     },
   });
 
@@ -42,7 +47,7 @@ export default function LoginPage() {
     mutationFn: () => register(registerForm.name, registerForm.phone, registerForm.password),
     onSuccess: (data) => {
       setAuth(data.user, data.token);
-      navigate('/');
+      navigate(redirectTo, { replace: true });
     },
   });
 

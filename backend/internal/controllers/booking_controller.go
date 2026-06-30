@@ -120,8 +120,35 @@ func (h *BookingController) CreateManual(c *gin.Context) {
 	c.JSON(http.StatusCreated, dto.FromBookingDetail(*detail))
 }
 
+// GetAll godoc — GET /admin/bookings
+// Staff ve todas las reservas, con filtro opcional por fecha.
+func (h *BookingController) GetAll(c *gin.Context) {
+	var dateFilter *time.Time
+	if dateStr := c.Query("date"); dateStr != "" {
+		d, err := time.Parse("2006-01-02", dateStr)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": service.ErrInvalidBookingDate.Error()})
+			return
+		}
+		dateFilter = &d
+	}
+
+	rows, err := h.bookingService.GetAll(c.Request.Context(), dateFilter)
+	if err != nil {
+		log.Printf("GetAll error: %v", err)
+		h.handleBookingError(c, err)
+		return
+	}
+
+	response := make([]dto.BookingDetailResponse, 0, len(rows))
+	for _, row := range rows {
+		response = append(response, dto.FromBookingDetail(row))
+	}
+	c.JSON(http.StatusOK, response)
+}
+
 // GetMyBookings godoc — GET /bookings
-// Customer ve sus reservas. Recepcionista/admin ve todas.
+// Devuelve las reservas del usuario autenticado, sin importar el rol.
 func (h *BookingController) GetMyBookings(c *gin.Context) {
 	userID := c.GetInt64("user_id")
 	if userID <= 0 {
@@ -129,32 +156,7 @@ func (h *BookingController) GetMyBookings(c *gin.Context) {
 		return
 	}
 
-	role := c.GetString("role")
-
-	var (
-		rows []domain.BookingDetail
-		err  error
-	)
-
-	if role == domain.RoleReceptionist || role == domain.RoleAdmin {
-		var dateFilter *time.Time
-
-		if dateStr := c.Query("date"); dateStr != "" {
-			d, parseErr := time.Parse("2006-01-02", dateStr)
-			if parseErr != nil {
-				c.JSON(http.StatusBadRequest, gin.H{"error": service.ErrInvalidBookingDate.Error()})
-				return
-			}
-
-			dateFilter = &d
-		}
-
-		rows, err = h.bookingService.GetAll(c.Request.Context(), dateFilter)
-	} else {
-		rows, err = h.bookingService.GetMyBookings(c.Request.Context(), userID)
-
-	}
-
+	rows, err := h.bookingService.GetMyBookings(c.Request.Context(), userID)
 	if err != nil {
 		log.Printf("GetMyBookings error: %v", err)
 		h.handleBookingError(c, err)

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   CalendarDays, Clock, User, Phone, XCircle, Plus, ChevronLeft, ChevronRight,
@@ -273,6 +273,38 @@ function ManualBookingDialog({
   );
 }
 
+// ── Space form (must be outside SpacesPanel to avoid focus loss on re-render) ──
+const spaceInputClass = 'w-full px-3.5 py-2.5 bg-surface border-[1.5px] border-black/10 rounded-lg text-sm font-medium text-ink placeholder:text-ink-2/60 outline-none transition-all duration-normal focus:border-primary focus:ring-2 focus:ring-primary/[0.13]';
+
+function SpaceForm({ form, setForm, showNew, onCancel, onSubmit, isPending, submitLabel }: {
+  form: { name: string; type: string; description: string; price_per_slot: string };
+  setForm: React.Dispatch<React.SetStateAction<{ name: string; type: string; description: string; price_per_slot: string }>>;
+  showNew: boolean;
+  onCancel: () => void;
+  onSubmit: () => void;
+  isPending: boolean;
+  submitLabel: string;
+}) {
+  return (
+    <div className="flex flex-col gap-3 mt-3 p-4 bg-bg rounded-xl border border-black/[0.06]">
+      <input placeholder="Nombre" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className={spaceInputClass} />
+      {showNew && (
+        <select value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))} className={spaceInputClass}>
+          <option value="cancha_padel">Pádel</option>
+          <option value="cancha_futbol">Fútbol</option>
+          <option value="quincho">Quincho / Salón</option>
+        </select>
+      )}
+      <input placeholder="Descripción (opcional)" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} className={spaceInputClass} />
+      <input type="number" placeholder="Precio por turno" value={form.price_per_slot} onChange={e => setForm(f => ({ ...f, price_per_slot: e.target.value }))} className={spaceInputClass} />
+      <div className="flex gap-2">
+        <button onClick={onCancel} className="flex-1 bg-surface text-ink font-semibold rounded-lg py-2.5 text-sm hover:bg-surface-2 active:scale-[0.98] transition-all">Cancelar</button>
+        <button onClick={onSubmit} disabled={isPending || !form.name || !form.price_per_slot} className="flex-1 bg-primary text-white font-bold rounded-lg py-2.5 text-sm hover:bg-primary-dark active:scale-[0.98] transition-all disabled:opacity-50">{isPending ? 'Guardando...' : submitLabel}</button>
+      </div>
+    </div>
+  );
+}
+
 // ── Spaces panel (admin only) ─────────────────────────────────────────────────
 function SpacesPanel() {
   const queryClient = useQueryClient();
@@ -298,34 +330,13 @@ function SpacesPanel() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['spaces'] }),
   });
 
-  const inputClass = 'w-full px-3.5 py-2.5 bg-surface border-[1.5px] border-black/10 rounded-lg text-sm font-medium text-ink placeholder:text-ink-2/60 outline-none transition-all duration-normal focus:border-primary focus:ring-2 focus:ring-primary/[0.13]';
-
-  const SpaceForm = ({ onSubmit, isPending, submitLabel }: { onSubmit: () => void; isPending: boolean; submitLabel: string }) => (
-    <div className="flex flex-col gap-3 mt-3 p-4 bg-bg rounded-xl border border-black/[0.06]">
-      <input placeholder="Nombre" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className={inputClass} />
-      {showNew && (
-        <select value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))} className={inputClass}>
-          <option value="cancha_padel">Pádel</option>
-          <option value="cancha_futbol">Fútbol</option>
-          <option value="quincho">Quincho / Salón</option>
-        </select>
-      )}
-      <input placeholder="Descripción (opcional)" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} className={inputClass} />
-      <input type="number" placeholder="Precio por turno" value={form.price_per_slot} onChange={e => setForm(f => ({ ...f, price_per_slot: e.target.value }))} className={inputClass} />
-      <div className="flex gap-2">
-        <button onClick={() => { setShowNew(false); setEditing(null); }} className="flex-1 bg-surface text-ink font-semibold rounded-lg py-2.5 text-sm hover:bg-surface-2 active:scale-[0.98] transition-all">Cancelar</button>
-        <button onClick={onSubmit} disabled={isPending || !form.name || !form.price_per_slot} className="flex-1 bg-primary text-white font-bold rounded-lg py-2.5 text-sm hover:bg-primary-dark active:scale-[0.98] transition-all disabled:opacity-50">{isPending ? 'Guardando...' : submitLabel}</button>
-      </div>
-    </div>
-  );
-
   return (
     <div>
       <div className="flex items-center justify-between mb-5">
         <h2 className="text-2xs font-bold tracking-[0.1em] uppercase text-primary">Espacios</h2>
         {!showNew && <button onClick={() => { setShowNew(true); setEditing(null); }} className="flex items-center gap-1.5 text-sm font-semibold text-primary hover:underline"><Plus size={14} /> Nuevo espacio</button>}
       </div>
-      {showNew && <SpaceForm onSubmit={() => createMutation.mutate()} isPending={createMutation.isPending} submitLabel="Crear espacio" />}
+      {showNew && <SpaceForm form={form} setForm={setForm} showNew={showNew} onCancel={() => { setShowNew(false); setEditing(null); }} onSubmit={() => createMutation.mutate()} isPending={createMutation.isPending} submitLabel="Crear espacio" />}
       {isLoading ? (
         <div className="flex flex-col gap-3">{Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-16 bg-white rounded-xl animate-pulse" />)}</div>
       ) : (
@@ -347,7 +358,7 @@ function SpacesPanel() {
                     <button onClick={() => deleteMutation.mutate(space.id)} className="p-2 rounded-lg text-ink-2 hover:text-status-cancelled hover:bg-status-cancelled/8 transition-all active:scale-[0.98]"><Trash2 size={15} /></button>
                   </div>
                 </div>
-                {editing === space.id && <SpaceForm onSubmit={() => updateMutation.mutate(space.id)} isPending={updateMutation.isPending} submitLabel="Guardar cambios" />}
+                {editing === space.id && <SpaceForm form={form} setForm={setForm} showNew={false} onCancel={() => setEditing(null)} onSubmit={() => updateMutation.mutate(space.id)} isPending={updateMutation.isPending} submitLabel="Guardar cambios" />}
               </div>
             );
           })}

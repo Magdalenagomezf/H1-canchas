@@ -10,9 +10,10 @@ import (
 // Config agrupa toda la configuración de la app.
 // Se carga una vez al arrancar y se pasa a quien la necesite.
 type Config struct {
-	Port      string
-	DSN       string // connection string para PostgreSQL
-	JWTSecret string
+	Port          string
+	DSN           string
+	JWTSecret     string
+	AllowedOrigin string
 }
 
 // Load lee el .env y arma la Config.
@@ -23,27 +24,37 @@ func Load() (*Config, error) {
 	_ = godotenv.Load()
 
 	port := getEnv("PORT", "8080")
-
-	host := mustGetEnv("DB_HOST")
-	dbPort := mustGetEnv("DB_PORT")
-	user := mustGetEnv("DB_USER")
-	password := mustGetEnv("DB_PASSWORD")
-	dbName := mustGetEnv("DB_NAME")
+	allowedOrigin := getEnv("ALLOWED_ORIGIN", "http://localhost:5173")
 	jwtSecret := mustGetEnv("JWT_SECRET")
 
-	if host == "" || dbPort == "" || user == "" || password == "" || dbName == "" || jwtSecret == "" {
-		return nil, fmt.Errorf("faltan variables de entorno de base de datos")
+	if jwtSecret == "" {
+		return nil, fmt.Errorf("JWT_SECRET es requerido")
 	}
 
-	dsn := fmt.Sprintf(
-		"host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-		host, dbPort, user, password, dbName,
-	)
+	// Railway provee DATABASE_URL completa; en local se arma desde variables separadas.
+	var dsn string
+	if dbURL := os.Getenv("DATABASE_URL"); dbURL != "" {
+		dsn = dbURL
+	} else {
+		host := mustGetEnv("DB_HOST")
+		dbPort := mustGetEnv("DB_PORT")
+		user := mustGetEnv("DB_USER")
+		password := mustGetEnv("DB_PASSWORD")
+		dbName := mustGetEnv("DB_NAME")
+		if host == "" || dbPort == "" || user == "" || password == "" || dbName == "" {
+			return nil, fmt.Errorf("faltan variables de entorno: DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME")
+		}
+		dsn = fmt.Sprintf(
+			"host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
+			host, dbPort, user, password, dbName,
+		)
+	}
 
 	return &Config{
-		Port:      port,
-		DSN:       dsn,
-		JWTSecret: jwtSecret,
+		Port:          port,
+		DSN:           dsn,
+		JWTSecret:     jwtSecret,
+		AllowedOrigin: allowedOrigin,
 	}, nil
 }
 

@@ -42,7 +42,7 @@ func main() {
 	r := gin.Default()
 
 	r.Use(func(c *gin.Context) {
-		c.Header("Access-Control-Allow-Origin", "http://localhost:5173")
+		c.Header("Access-Control-Allow-Origin", cfg.AllowedOrigin)
 		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 		c.Header("Access-Control-Allow-Headers", "Origin, Content-Type, Authorization")
 		if c.Request.Method == "OPTIONS" {

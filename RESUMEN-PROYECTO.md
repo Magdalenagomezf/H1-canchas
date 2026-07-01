@@ -14,10 +14,14 @@ Sistema de reservas de canchas deportivas (pádel, fútbol) y quinchos/salones. 
 
 ### Frontend
 - **React 19** + **TypeScript** + **Vite**
-- **MUI v9** (Material UI) — tema verde/marrón personalizado
+- **Tailwind CSS v4** + utilidades shadcn/ui (clsx, tailwind-merge)
 - **TanStack Query v5** — fetching y cache
 - **React Router v7**
 - **Framer Motion** — animaciones
+- **lucide-react** — íconos
+- **sonner** — toasts
+- **vaul** — drawers
+- **react-day-picker** + **date-fns** — selector de fechas
 - **Axios** — cliente HTTP
 
 ---
@@ -113,6 +117,9 @@ Inyección de dependencias manual en `cmd/main.go`. Las interfaces las define el
 | Método | Ruta | Quién | Descripción |
 |---|---|---|---|
 | POST | `/admin/users` | Admin | Crear usuario `receptionist` o `admin` |
+| GET | `/admin/users` | Admin | Listar todos los usuarios |
+| PATCH | `/admin/users/:id/role` | Admin | Cambiar rol de un usuario |
+| DELETE | `/admin/users/:id` | Admin | Eliminar usuario (no puede borrarse a sí mismo; falla si tiene reservas) |
 
 ---
 
@@ -154,26 +161,27 @@ Si dos requests llegan al mismo tiempo, el primero inserta y el segundo falla en
 
 ## Estado del frontend
 
-### Páginas listas
+### Páginas
 | Ruta | Página | Estado |
 |---|---|---|
 | `/` | HomePage | ✅ Hero, grilla de espacios, "Cómo funciona", CTA |
 | `/login` | LoginPage | ✅ Login + Registro en tabs, manejo de errores |
 | `/canchas` | SpacesPage | ✅ Listado con filtros por tipo |
-| `/canchas/:id` | SpaceDetailPage | ✅ Detalle, selector de fecha, grilla de slots, reserva |
+| `/canchas/:id` | SpaceDetailPage | ✅ Detalle, selector de fecha, grilla de slots disponibles, reserva |
+| `/mis-reservas` | MyBookingsPage | ✅ Lista de reservas (activas / historial), cancelar con dialog de confirmación |
+| `/panel` | StaffPanelPage | ✅ Panel receptionist/admin — 3 tabs (admin): reservas del día con navegación, reserva manual, gestión de canchas y usuarios |
 
-### Páginas pendientes
-| Ruta | Página | Notas |
-|---|---|---|
-| `/mis-reservas` | MyBookingsPage | Lista de reservas del usuario + cancelar |
-| `/panel` | StaffPanel | Solo receptionist/admin: reservas del día, crear reserva manual |
+### Rutas protegidas
+- `PrivateRoute` — redirige a `/login` si no hay sesión (usado en `/mis-reservas`)
+- `PublicOnlyRoute` — redirige a `/` si ya está autenticado (usado en `/login`)
+- `StaffRoute` — redirige a `/login` sin sesión, o a `/` si el rol es `customer` (usado en `/panel`)
 
 ### Componentes compartidos
 - `Navbar` — con estado de auth, responsive (drawer en mobile)
 - `SpaceCard` + `SpaceCardSkeleton` — usado en HomePage y SpacesPage
 
 ### Hooks
-- `useAuth` — contexto global de autenticación, persiste en localStorage
+- `useAuth` — contexto global de autenticación, persiste en sessionStorage (aislamiento por tab)
 
 ---
 
@@ -209,19 +217,11 @@ Preguntas a resolver con el dueño del negocio antes de implementarlos:
 ## Pendientes técnicos
 
 ### Backend
-1. **`GET /spaces/:id/slots?date=YYYY-MM-DD`** — actualmente ignora la fecha y devuelve todos los slots sin indicar disponibilidad. Cuando se implemente, devolver `is_available: bool` por slot cruzando contra reservas existentes.
+1. **Tabla `space_blocks`** — bloquear una cancha en fecha puntual (feriado, mantenimiento). Campos: `space_id`, `slot_id` (nullable = bloquea el día completo), `block_date`, `reason`, `created_by`.
 
-2. **Tabla `space_blocks`** — bloquear una cancha en fecha puntual (feriado, mantenimiento). Campos: `space_id`, `slot_id` (nullable = bloquea el día completo), `block_date`, `reason`, `created_by`.
+2. **Campo `payment_status` en bookings** — `no_pagada / pendiente_pago / pagada / reembolsada`. Se agrega al integrar MercadoPago.
 
-3. **Campo `payment_status` en bookings** — `no_pagada / pendiente_pago / pagada / reembolsada`. Se agrega al integrar MercadoPago.
-
-4. **Paginación** en `GET /bookings` y `GET /spaces`.
-
-### Frontend
-1. **Rutas protegidas** — redirigir a `/login` si el usuario accede a `/mis-reservas` sin sesión.
-2. **Redirigir si ya está logueado** — si un usuario autenticado va a `/login`, mandarlo a `/`.
-3. **`/mis-reservas`** — lista de reservas del usuario con opción de cancelar.
-4. **`/panel`** — panel de staff: ver todas las reservas del día, crear reserva manual.
+3. **Paginación** en `GET /bookings` y `GET /spaces`.
 
 ---
 

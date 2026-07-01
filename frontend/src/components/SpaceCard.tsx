@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, Trophy, CircleDot, UtensilsCrossed, type LucideIcon } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -43,13 +43,26 @@ export function SpaceCard({ space, index }: { space: Space; index: number }) {
   const [imgIndex, setImgIndex] = useState(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  const isTouch = typeof window !== 'undefined' && window.matchMedia('(hover: none)').matches;
+
+  // On touch devices, auto-cycle images since there's no hover
+  useEffect(() => {
+    if (!isTouch || images.length <= 1) return;
+    intervalRef.current = setInterval(() => {
+      setImgIndex((prev) => (prev + 1) % images.length);
+    }, 2000);
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+  }, [isTouch, images.length]);
+
   const handleMouseEnter = () => {
+    if (isTouch) return;
     intervalRef.current = setInterval(() => {
       setImgIndex((prev) => (prev + 1) % images.length);
     }, 900);
   };
 
   const handleMouseLeave = () => {
+    if (isTouch) return;
     if (intervalRef.current) clearInterval(intervalRef.current);
     intervalRef.current = null;
     setImgIndex(0);

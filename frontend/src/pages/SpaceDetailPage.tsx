@@ -1,326 +1,328 @@
-import { useState } from 'react';
-import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import Box from '@mui/material/Box';
-import Container from '@mui/material/Container';
-import Typography from '@mui/material/Typography';
-import Button from '@mui/material/Button';
-import Grid from '@mui/material/Grid';
-import Card from '@mui/material/Card';
-import CardContent from '@mui/material/CardContent';
-import Chip from '@mui/material/Chip';
-import Skeleton from '@mui/material/Skeleton';
-import Alert from '@mui/material/Alert';
-import Snackbar from '@mui/material/Snackbar';
-import TextField from '@mui/material/TextField';
-import Divider from '@mui/material/Divider';
-import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import AccessTimeIcon from '@mui/icons-material/AccessTime';
-import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
-import LockIcon from '@mui/icons-material/Lock';
+import { useState, useEffect, useRef } from 'react';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useQuery, useMutation } from '@tanstack/react-query';
+import { Trophy, CircleDot, UtensilsCrossed, ArrowLeft, CheckCircle2, Clock } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { getSpace, getSlots } from '../api/spaces';
 import { createBooking } from '../api/bookings';
+import { SPACE_IMAGES, SPACE_LABELS } from '../components/SpaceCard';
 import { useAuth } from '../hooks/useAuth';
-import { SPACE_IMAGES, SPACE_LABELS, SPACE_ICONS } from '../components/SpaceCard';
-import type { SpaceSlot } from '../types';
+import { cn } from '@/lib/utils';
+import type { SpaceType } from '../types';
 
-const MotionCard = motion(Card);
+const SPACE_ICONS: Record<SpaceType, typeof Trophy> = {
+  cancha_padel: Trophy,
+  cancha_futbol: CircleDot,
+  quincho: UtensilsCrossed,
+};
 
-const today = new Date().toISOString().split('T')[0];
+function getNextDays(n: number) {
+  return Array.from({ length: n }, (_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() + i);
+    return d;
+  });
+}
+
+const DAYS = getNextDays(14);
+const today = DAYS[0].toISOString().split('T')[0];
 
 export default function SpaceDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
-  const queryClient = useQueryClient();
   const { isAuthenticated } = useAuth();
 
-  const [date, setDate] = useState('');
-  const [selectedSlot, setSelectedSlot] = useState<SpaceSlot | null>(null);
-  const [successOpen, setSuccessOpen] = useState(false);
-  const [conflictSlotId, setConflictSlotId] = useState<number | null>(null);
+  const [date, setDate] = useState(today);
+  const [selectedSlot, setSelectedSlot] = useState<number | null>(null);
+  const [booked, setBooked] = useState(false);
+  const [imgIndex, setImgIndex] = useState(0);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const spaceId = Number(id);
-
-  const { data: space, isLoading: loadingSpace } = useQuery({
-    queryKey: ['space', spaceId],
-    queryFn: () => getSpace(spaceId),
-    enabled: !!spaceId,
+  const { data: space, isLoading: spaceLoading } = useQuery({
+    queryKey: ['space', id],
+    queryFn: () => getSpace(Number(id)),
+    enabled: !!id,
   });
 
-  const { data: slots, isLoading: loadingSlots } = useQuery({
-    queryKey: ['slots', spaceId, date],
-    queryFn: () => getSlots(spaceId, date),
-    enabled: !!spaceId && !!date,
+  const { data: slots, isLoading: slotsLoading } = useQuery({
+    queryKey: ['slots', id, date],
+    queryFn: () => getSlots(Number(id), date),
+    enabled: !!id && !!date,
   });
 
-  const bookMutation = useMutation({
-    mutationFn: (slotId: number) =>
-      createBooking({ space_id: spaceId, slot_id: slotId, booking_date: date }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['my-bookings'] });
-      queryClient.invalidateQueries({ queryKey: ['slots', spaceId, date] });
-      setSelectedSlot(null);
-      setSuccessOpen(true);
-      setTimeout(() => navigate('/mis-reservas'), 1800);
-    },
-    onError: (err: unknown) => {
-      const status = (err as { response?: { status: number } })?.response?.status;
-      if (status === 409) {
-        setConflictSlotId(selectedSlot?.id ?? null);
-      }
-    },
+  const bookingMutation = useMutation({
+    mutationFn: () =>
+      createBooking({ space_id: Number(id), slot_id: selectedSlot!, booking_date: date }),
+    onSuccess: () => { setBooked(true); setSelectedSlot(null); },
   });
 
-  const handleBook = (slot: SpaceSlot) => {
+  const handleConfirm = () => {
     if (!isAuthenticated) {
       navigate('/login', { state: { from: location } });
       return;
     }
-    setSelectedSlot(slot);
-    setConflictSlotId(null);
-    bookMutation.mutate(slot.id);
+    bookingMutation.mutate();
   };
 
-  if (loadingSpace) return <SpaceDetailSkeleton />;
+  const images = space ? SPACE_IMAGES[space.type] : [];
 
-  if (!space) {
+  useEffect(() => {
+    if (images.length <= 1) return;
+    intervalRef.current = setInterval(() => {
+      setImgIndex((prev) => (prev + 1) % images.length);
+    }, 3000);
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+  }, [images.length]);
+
+  const handleDotClick = (i: number) => {
+    setImgIndex(i);
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    intervalRef.current = setInterval(() => {
+      setImgIndex((prev) => (prev + 1) % images.length);
+    }, 3000);
+  };
+
+  if (spaceLoading) {
     return (
-      <Container maxWidth="md" sx={{ py: 10, textAlign: 'center' }}>
-        <Typography variant="h5" color="text.secondary">
-          Espacio no encontrado.
-        </Typography>
-        <Button component={Link} to="/canchas" sx={{ mt: 3 }}>
-          Ver todos los espacios
-        </Button>
-      </Container>
+      <div className="animate-fade-up min-h-[calc(100vh-58px)] bg-bg">
+        <div className="h-[55vh] bg-surface animate-pulse" />
+        <div className="max-w-[1140px] mx-auto px-6 py-8 flex flex-col gap-4">
+          <div className="h-8 w-1/3 bg-surface rounded-full animate-pulse" />
+          <div className="h-4 w-2/3 bg-surface rounded-full animate-pulse" />
+          <div className="h-24 bg-surface rounded-xl animate-pulse mt-4" />
+        </div>
+      </div>
     );
   }
+
+  if (!space) return null;
 
   const Icon = SPACE_ICONS[space.type];
 
   return (
-    <Box>
-      {/* Hero image */}
-      <Box
-        sx={{
-          height: { xs: 240, md: 360 },
-          backgroundImage: `linear-gradient(to bottom, rgba(0,0,0,0.15), rgba(0,0,0,0.55)),
-            url(${SPACE_IMAGES[space.type]})`,
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'flex-end',
-          p: { xs: 3, md: 5 },
-        }}
-      >
-        <Button
-          component={Link}
-          to="/canchas"
-          startIcon={<ArrowBackIcon />}
-          sx={{ color: '#fff', mb: 2, alignSelf: 'flex-start', opacity: 0.85 }}
+    <div className="animate-fade-up min-h-[calc(100vh-58px)] bg-bg">
+
+      {/* ── Hero image gallery ── */}
+      <div className="relative h-[55vh] bg-dark overflow-hidden">
+        {images.map((src, i) => (
+          <img
+            key={src}
+            src={src}
+            alt={space.name}
+            className={cn('absolute inset-0 w-full h-full object-cover transition-opacity duration-700', i === imgIndex ? 'opacity-100' : 'opacity-0')}
+          />
+        ))}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/10 to-transparent" />
+
+        <button
+          onClick={() => navigate('/canchas')}
+          className="absolute top-5 left-5 flex items-center gap-2 text-white/80 text-sm font-semibold hover:text-white transition-colors bg-black/25 backdrop-blur-sm rounded-lg px-3 py-2 active:scale-[0.98]"
         >
-          Volver
-        </Button>
-        <Chip
-          icon={<Icon sx={{ color: '#fff !important' }} />}
-          label={SPACE_LABELS[space.type]}
-          size="small"
-          sx={{ bgcolor: 'primary.main', color: '#fff', mb: 1.5, alignSelf: 'flex-start' }}
-        />
-        <Typography variant="h2" sx={{ color: '#fff', fontSize: { xs: '2rem', md: '3rem' } }}>
-          {space.name}
-        </Typography>
-      </Box>
+          <ArrowLeft size={15} /> Canchas
+        </button>
 
-      <Container maxWidth="lg" sx={{ py: { xs: 4, md: 6 } }}>
-        <Grid container spacing={5}>
-          {/* Info izquierda */}
-          <Grid size={{ xs: 12, md: 4 }}>
-            <Box sx={{ position: { md: 'sticky' }, top: 88 }}>
-              {space.description && (
-                <Typography variant="body1" color="text.secondary" sx={{ mb: 3, lineHeight: 1.7 }}>
-                  {space.description}
-                </Typography>
-              )}
-              <Divider sx={{ mb: 3 }} />
-              <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.5, mb: 1 }}>
-                <Typography variant="h4" color="primary.main">
-                  ${space.price_per_slot.toLocaleString('es-AR')}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  por turno
-                </Typography>
-              </Box>
-
-              {!isAuthenticated && (
-                <Alert severity="info" icon={<LockIcon />} sx={{ mt: 2 }}>
-                  <Typography variant="body2">
-                    <Link to="/login" style={{ color: 'inherit', fontWeight: 600 }}>
-                      Iniciá sesión
-                    </Link>{' '}
-                    para poder reservar.
-                  </Typography>
-                </Alert>
-              )}
-            </Box>
-          </Grid>
-
-          {/* Slots derecha */}
-          <Grid size={{ xs: 12, md: 8 }}>
-            {/* Date picker */}
-            <Box sx={{ mb: 4 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-                <CalendarMonthIcon color="primary" />
-                <Typography variant="h6">Seleccioná una fecha</Typography>
-              </Box>
-              <TextField
-                type="date"
-                value={date}
-                onChange={(e) => {
-                  setDate(e.target.value);
-                  setConflictSlotId(null);
-                }}
-                inputProps={{ min: today }}
-                fullWidth
-                sx={{ maxWidth: 280 }}
-              />
-            </Box>
-
-            {/* Slots */}
-            {date && (
-              <>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2.5 }}>
-                  <AccessTimeIcon color="primary" />
-                  <Typography variant="h6">Turnos disponibles</Typography>
-                </Box>
-
-                {loadingSlots ? (
-                  <Grid container spacing={2}>
-                    {Array.from({ length: 4 }).map((_, i) => (
-                      <Grid key={i} size={{ xs: 12, sm: 6 }}>
-                        <Skeleton variant="rectangular" height={96} sx={{ borderRadius: 2 }} />
-                      </Grid>
-                    ))}
-                  </Grid>
-                ) : slots?.length === 0 ? (
-                  <Alert severity="info">Este espacio no tiene turnos configurados aún.</Alert>
-                ) : (
-                  <Grid container spacing={2}>
-                    {slots?.map((slot, i) => {
-                      const isBooking =
-                        bookMutation.isPending && selectedSlot?.id === slot.id;
-                      const hasConflict = conflictSlotId === slot.id;
-
-                      return (
-                        <Grid key={slot.id} size={{ xs: 12, sm: 6 }}>
-                          <MotionCard
-                            initial={{ opacity: 0, y: 16 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: i * 0.06 }}
-                            sx={{
-                              border: hasConflict
-                                ? '1.5px solid'
-                                : '1.5px solid transparent',
-                              borderColor: hasConflict ? 'error.main' : 'transparent',
-                            }}
-                          >
-                            <CardContent
-                              sx={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                                gap: 2,
-                                p: '16px !important',
-                              }}
-                            >
-                              <Box>
-                                <Typography variant="h6" sx={{ fontSize: '1rem' }}>
-                                  {slot.label}
-                                </Typography>
-                                {slot.start_time && slot.end_time && (
-                                  <Typography variant="body2" color="text.secondary">
-                                    {slot.start_time} – {slot.end_time}
-                                  </Typography>
-                                )}
-                                {hasConflict && (
-                                  <Typography variant="caption" color="error">
-                                    Ya está reservado para esta fecha
-                                  </Typography>
-                                )}
-                              </Box>
-                              <Button
-                                variant="contained"
-                                size="small"
-                                onClick={() => handleBook(slot)}
-                                disabled={isBooking}
-                                sx={{ flexShrink: 0 }}
-                              >
-                                {isBooking ? 'Reservando...' : 'Reservar'}
-                              </Button>
-                            </CardContent>
-                          </MotionCard>
-                        </Grid>
-                      );
-                    })}
-                  </Grid>
+        {images.length > 1 && (
+          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-2">
+            {images.map((_, i) => (
+              <button
+                key={i}
+                onClick={() => handleDotClick(i)}
+                className={cn(
+                  'rounded-full transition-all duration-300',
+                  i === imgIndex ? 'w-5 h-2 bg-white' : 'w-2 h-2 bg-white/50 hover:bg-white/80',
                 )}
-              </>
-            )}
+              />
+            ))}
+          </div>
+        )}
 
-            {!date && (
-              <Box
-                sx={{
-                  border: '2px dashed',
-                  borderColor: 'divider',
-                  borderRadius: 3,
-                  py: 8,
-                  textAlign: 'center',
-                }}
-              >
-                <CalendarMonthIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
-                <Typography color="text.secondary">
-                  Elegí una fecha para ver los turnos disponibles
-                </Typography>
-              </Box>
-            )}
-          </Grid>
-        </Grid>
-      </Container>
+        <div className="absolute bottom-0 left-0 right-0 px-6 pb-8">
+          <div className="max-w-[1140px] mx-auto">
+            <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 bg-primary text-white text-2xs font-bold uppercase tracking-wide mb-3">
+              <Icon size={11} />
+              {SPACE_LABELS[space.type]}
+            </span>
+            <h1 className="font-serif text-4xl text-white tracking-tight">{space.name}</h1>
+          </div>
+        </div>
+      </div>
 
-      {/* Snackbar de éxito */}
-      <Snackbar
-        open={successOpen}
-        autoHideDuration={3000}
-        onClose={() => setSuccessOpen(false)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert severity="success" onClose={() => setSuccessOpen(false)}>
-          ¡Reserva confirmada! Redirigiendo a tus reservas...
-        </Alert>
-      </Snackbar>
-    </Box>
-  );
-}
+      {/* ── Content ── */}
+      <div className="max-w-[1140px] mx-auto px-6 py-8">
 
-function SpaceDetailSkeleton() {
-  return (
-    <Box>
-      <Skeleton variant="rectangular" height={320} />
-      <Container maxWidth="lg" sx={{ py: 5 }}>
-        <Grid container spacing={5}>
-          <Grid size={{ xs: 12, md: 4 }}>
-            <Skeleton height={28} sx={{ mb: 1 }} />
-            <Skeleton height={28} width="60%" sx={{ mb: 3 }} />
-            <Skeleton height={48} width="50%" />
-          </Grid>
-          <Grid size={{ xs: 12, md: 8 }}>
-            <Skeleton height={56} width={280} sx={{ mb: 4 }} />
-          </Grid>
-        </Grid>
-      </Container>
-    </Box>
+        {/* Info bar */}
+        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-8">
+          {space.description && (
+            <p className="text-sm text-ink-2 leading-relaxed max-w-xl">{space.description}</p>
+          )}
+          <div className="flex items-baseline gap-1 shrink-0">
+            <span className="font-serif text-3xl text-ink">
+              ${space.price_per_slot.toLocaleString('es-AR')}
+            </span>
+            <span className="text-sm text-ink-2">/ turno</span>
+          </div>
+        </div>
+
+        <div className="border-t border-black/[0.06] pt-8">
+
+          {booked ? (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="max-w-sm mx-auto bg-white rounded-xl border-[1.5px] border-black/[0.07] shadow-md p-8 text-center"
+            >
+              <div className="w-14 h-14 rounded-full bg-status-confirmed/10 flex items-center justify-center mx-auto mb-4">
+                <CheckCircle2 size={28} className="text-status-confirmed" />
+              </div>
+              <h3 className="font-serif text-2xl text-ink mb-1">¡Reserva confirmada!</h3>
+              <p className="text-sm text-ink-2 mb-6">Tu turno quedó registrado. Te esperamos.</p>
+              <div className="flex flex-col gap-2">
+                <button
+                  onClick={() => navigate('/mis-reservas')}
+                  className="bg-primary text-white font-bold rounded-lg px-6 py-3 text-sm transition-all hover:bg-primary-dark hover:shadow-glow active:scale-[0.98]"
+                >
+                  Ver mis reservas
+                </button>
+                <button
+                  onClick={() => { setBooked(false); setDate(today); }}
+                  className="text-sm text-ink-2 hover:text-ink transition-colors py-2"
+                >
+                  Reservar otro turno
+                </button>
+              </div>
+            </motion.div>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-10 items-start">
+
+              {/* Date + slots */}
+              <div>
+                {/* Week strip */}
+                <label className="text-2xs font-bold tracking-[0.08em] uppercase text-ink-2 mb-3 block">
+                  Seleccioná el día
+                </label>
+                <div className="flex gap-2 overflow-x-auto pb-2 -mx-1 px-1">
+                  {DAYS.map((d) => {
+                    const iso = d.toISOString().split('T')[0];
+                    const isSelected = date === iso;
+                    const dayName = d.toLocaleDateString('es-AR', { weekday: 'short' });
+                    const dayNum = d.getDate();
+                    const monthName = d.toLocaleDateString('es-AR', { month: 'short' });
+                    return (
+                      <button
+                        key={iso}
+                        onClick={() => { setDate(iso); setSelectedSlot(null); }}
+                        className={cn(
+                          'flex flex-col items-center shrink-0 w-[52px] pt-2.5 pb-2 rounded-xl border-[1.5px] transition-all duration-normal active:scale-[0.96]',
+                          isSelected
+                            ? 'bg-primary border-primary text-white shadow-sm'
+                            : 'bg-white border-black/[0.07] text-ink-2 hover:border-primary/40 hover:text-ink',
+                        )}
+                      >
+                        <span className="text-2xs font-bold uppercase tracking-wide capitalize">
+                          {dayName.replace('.', '')}
+                        </span>
+                        <span className="text-xl font-bold leading-none my-1">{dayNum}</span>
+                        <span className={cn('text-2xs capitalize', isSelected ? 'text-white/70' : 'text-ink-2/60')}>
+                          {monthName.replace('.', '')}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Slots */}
+                <div className="mt-8">
+                  <label className="text-2xs font-bold tracking-[0.08em] uppercase text-ink-2 mb-3 block">
+                    Horarios disponibles
+                  </label>
+
+                  {slotsLoading ? (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                      {Array.from({ length: 6 }).map((_, i) => (
+                        <div key={i} className="h-16 bg-surface rounded-xl animate-pulse" />
+                      ))}
+                    </div>
+                  ) : !slots?.length ? (
+                    <div className="flex items-center gap-2 py-6 text-sm text-ink-2">
+                      <Clock size={15} className="shrink-0" />
+                      No hay turnos disponibles para este día.
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                      {slots.map((slot) => (
+                        <button
+                          key={slot.id}
+                          onClick={() => setSelectedSlot(slot.id === selectedSlot ? null : slot.id)}
+                          className={cn(
+                            'flex items-center justify-center px-3 py-3.5 rounded-xl border-[1.5px] text-sm font-bold transition-all duration-normal active:scale-[0.98]',
+                            selectedSlot === slot.id
+                              ? 'bg-primary/[0.08] border-primary text-primary'
+                              : 'bg-white border-black/[0.07] text-ink hover:border-primary/40',
+                          )}
+                        >
+                          {slot.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Confirm panel — sticky */}
+              <div className="lg:sticky lg:top-[74px] w-full lg:w-[280px]">
+                <div className="bg-white rounded-xl border-[1.5px] border-black/[0.07] shadow-md p-5">
+                  <div className="flex flex-col gap-1 mb-5 pb-5 border-b border-black/[0.06]">
+                    <span className="text-2xs font-bold uppercase tracking-wide text-ink-2">Resumen</span>
+                    <span className="text-sm font-semibold text-ink">{space.name}</span>
+                    {selectedSlot && slots && (
+                      <span className="text-sm text-primary font-semibold">
+                        Turno: {slots.find((s) => s.id === selectedSlot)?.label}
+                      </span>
+                    )}
+                    <span className="text-sm text-ink-2">
+                      {new Date(date + 'T12:00:00').toLocaleDateString('es-AR', {
+                        weekday: 'long', day: 'numeric', month: 'long',
+                      })}
+                    </span>
+                  </div>
+
+                  <div className="flex items-baseline justify-between mb-5">
+                    <span className="text-sm text-ink-2">Total</span>
+                    <span className="font-serif text-2xl text-ink">
+                      ${space.price_per_slot.toLocaleString('es-AR')}
+                    </span>
+                  </div>
+
+                  {bookingMutation.error && (
+                    <p className="text-xs text-status-cancelled font-medium mb-3">
+                      {bookingMutation.error.message}
+                    </p>
+                  )}
+
+                  <button
+                    onClick={handleConfirm}
+                    disabled={!selectedSlot || bookingMutation.isPending}
+                    className="w-full bg-primary text-white font-bold rounded-lg px-5 py-3 text-sm transition-all duration-normal ease-smooth hover:bg-primary-dark hover:shadow-glow active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {bookingMutation.isPending
+                      ? 'Confirmando...'
+                      : !isAuthenticated
+                      ? 'Iniciar sesión para reservar'
+                      : 'Confirmar reserva'}
+                  </button>
+
+                  {!isAuthenticated && (
+                    <p className="text-xs text-center text-ink-2 mt-2.5">
+                      Seleccioná un turno y te redirigimos al login.
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }

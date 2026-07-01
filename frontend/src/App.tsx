@@ -1,5 +1,4 @@
 import { Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
-import Box from '@mui/material/Box';
 import Navbar from './components/Navbar';
 import { useAuth } from './hooks/useAuth';
 import HomePage from './pages/HomePage';
@@ -29,29 +28,25 @@ function StaffRoute() {
 
 export default function App() {
   return (
-    <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
+    <div className="min-h-screen bg-bg">
       <Navbar />
       <Routes>
-        {/* Public */}
         <Route path="/" element={<HomePage />} />
         <Route path="/canchas" element={<SpacesPage />} />
         <Route path="/canchas/:id" element={<SpaceDetailPage />} />
 
-        {/* Public only — redirect to / if already authenticated */}
         <Route element={<PublicOnlyRoute />}>
           <Route path="/login" element={<LoginPage />} />
         </Route>
 
-        {/* Private — any authenticated user */}
         <Route element={<PrivateRoute />}>
           <Route path="/mis-reservas" element={<MyBookingsPage />} />
         </Route>
 
-        {/* Staff only — receptionist or admin */}
         <Route element={<StaffRoute />}>
           <Route path="/panel" element={<StaffPanelPage />} />
         </Route>
       </Routes>
-    </Box>
+    </div>
   );
 }

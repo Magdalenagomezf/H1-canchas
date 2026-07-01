@@ -1,153 +1,163 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import AppBar from '@mui/material/AppBar';
-import Toolbar from '@mui/material/Toolbar';
-import Typography from '@mui/material/Typography';
-import Button from '@mui/material/Button';
-import IconButton from '@mui/material/IconButton';
-import Box from '@mui/material/Box';
-import Drawer from '@mui/material/Drawer';
-import List from '@mui/material/List';
-import ListItemButton from '@mui/material/ListItemButton';
-import ListItemText from '@mui/material/ListItemText';
-import MenuIcon from '@mui/icons-material/Menu';
-import CloseIcon from '@mui/icons-material/Close';
-import { motion } from 'framer-motion';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { Menu, X } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../hooks/useAuth';
-
-const MotionButton = motion(Button);
+import { cn } from '@/lib/utils';
 
 export default function Navbar() {
   const { isAuthenticated, user, logout } = useAuth();
   const navigate = useNavigate();
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  const location = useLocation();
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   const handleLogout = () => {
     logout();
     navigate('/');
+    setMobileOpen(false);
   };
 
+  const isActive = (to: string) =>
+    to === '/' ? location.pathname === '/' : location.pathname.startsWith(to);
+
+  const links = [
+    { label: 'Inicio', to: '/' },
+    { label: 'Canchas', to: '/canchas' },
+    ...(isAuthenticated ? [{ label: 'Mis reservas', to: '/mis-reservas' }] : []),
+    ...(user?.role === 'receptionist' || user?.role === 'admin'
+      ? [{ label: 'Panel', to: '/panel' }]
+      : []),
+  ];
+
   return (
-    <AppBar
-      position="sticky"
-      elevation={0}
-      sx={{
-        backgroundColor: 'rgba(239,239,236,0.92)',
-        backdropFilter: 'blur(12px)',
-        borderBottom: '1px solid rgba(0,0,0,0.08)',
-      }}
-    >
-      <Toolbar sx={{ maxWidth: 1200, width: '100%', mx: 'auto', px: { xs: 2, md: 4 } }}>
-        {/* Logo */}
-        <Typography
-          component={Link}
-          to="/"
-          variant="h5"
-          sx={{
-            flexGrow: 1,
-            textDecoration: 'none',
-            color: 'primary.dark',
-            fontFamily: '"DM Serif Display", serif',
-            fontSize: { xs: '1.3rem', md: '1.5rem' },
-          }}
-        >
-          H1 Canchas
-        </Typography>
+    <>
+      <nav className="fixed top-0 inset-x-0 z-50 h-[58px] bg-dark-surface border-b border-white/[0.07] flex items-center justify-between px-6 shadow-[0_2px_16px_rgba(0,0,0,0.2)]">
+        <Link to="/" className="font-serif text-xl text-white tracking-tight">
+          H1 <span className="text-lime italic">Canchas</span>
+        </Link>
 
         {/* Desktop nav */}
-        <Box sx={{ display: { xs: 'none', md: 'flex' }, gap: 1, alignItems: 'center' }}>
-          <Button component={Link} to="/" sx={{ color: 'text.primary' }}>
-            Inicio
-          </Button>
-          <Button component={Link} to="/canchas" sx={{ color: 'text.primary' }}>
-            Canchas
-          </Button>
-
-          {isAuthenticated ? (
-            <>
-              <Button component={Link} to="/mis-reservas" sx={{ color: 'text.primary' }}>
-                Mis reservas
-              </Button>
-              {(user?.role === 'receptionist' || user?.role === 'admin') && (
-                <Button component={Link} to="/panel" sx={{ color: 'text.primary' }}>
-                  Panel
-                </Button>
+        <div className="hidden md:flex items-center gap-1">
+          {links.map((link) => (
+            <Link
+              key={link.to}
+              to={link.to}
+              className={cn(
+                'px-4 py-1.5 rounded-md text-sm font-medium transition-all duration-normal ease-smooth',
+                isActive(link.to)
+                  ? 'text-white bg-white/10'
+                  : 'text-white/60 hover:text-white hover:bg-white/[0.07]',
               )}
-              <MotionButton
-                variant="outlined"
-                color="primary"
-                onClick={handleLogout}
-                whileHover={{ scale: 1.04 }}
-                whileTap={{ scale: 0.97 }}
-                sx={{ ml: 1 }}
-              >
-                Salir
-              </MotionButton>
-            </>
+            >
+              {link.label}
+            </Link>
+          ))}
+        </div>
+
+        {/* Desktop auth */}
+        <div className="hidden md:flex items-center gap-3">
+          {isAuthenticated ? (
+            <button
+              onClick={handleLogout}
+              className="text-sm font-semibold text-white/60 hover:text-white transition-all duration-normal active:scale-[0.98]"
+            >
+              Salir
+            </button>
           ) : (
-            <MotionButton
-              variant="contained"
-              color="primary"
-              component={Link}
+            <Link
               to="/login"
-              whileHover={{ scale: 1.04 }}
-              whileTap={{ scale: 0.97 }}
-              sx={{ ml: 1 }}
+              className="bg-primary text-white font-bold rounded-lg px-4 py-2 text-sm transition-all duration-normal ease-smooth hover:bg-primary-dark hover:scale-[1.02] hover:shadow-glow active:scale-[0.98]"
             >
               Iniciar sesión
-            </MotionButton>
+            </Link>
           )}
-        </Box>
+        </div>
 
         {/* Mobile hamburger */}
-        <IconButton
-          sx={{ display: { xs: 'flex', md: 'none' }, color: 'text.primary' }}
-          onClick={() => setDrawerOpen(true)}
+        <button
+          className="md:hidden text-white/70 hover:text-white transition-colors"
+          onClick={() => setMobileOpen(true)}
         >
-          <MenuIcon />
-        </IconButton>
-      </Toolbar>
+          <Menu size={22} />
+        </button>
+      </nav>
 
-      {/* Mobile Drawer */}
-      <Drawer anchor="right" open={drawerOpen} onClose={() => setDrawerOpen(false)}>
-        <Box sx={{ width: 260, p: 2 }}>
-          <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-            <IconButton onClick={() => setDrawerOpen(false)}>
-              <CloseIcon />
-            </IconButton>
-          </Box>
-          <List>
-            {[
-              { label: 'Inicio', to: '/' },
-              { label: 'Canchas', to: '/canchas' },
-              ...(isAuthenticated ? [{ label: 'Mis reservas', to: '/mis-reservas' }] : []),
-              ...((user?.role === 'receptionist' || user?.role === 'admin')
-                ? [{ label: 'Panel', to: '/panel' }]
-                : []),
-            ].map((item) => (
-              <ListItemButton
-                key={item.to}
-                component={Link}
-                to={item.to}
-                onClick={() => setDrawerOpen(false)}
-              >
-                <ListItemText primary={item.label} />
-              </ListItemButton>
-            ))}
-            <ListItemButton
-              onClick={() => {
-                setDrawerOpen(false);
-                isAuthenticated ? handleLogout() : navigate('/login');
-              }}
+      {/* Spacer */}
+      <div className="h-[58px]" />
+
+      {/* Mobile overlay + drawer */}
+      <AnimatePresence>
+        {mobileOpen && (
+          <>
+            <motion.div
+              key="overlay"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="fixed inset-0 z-40 bg-black/50"
+              onClick={() => setMobileOpen(false)}
+            />
+            <motion.div
+              key="drawer"
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'tween', duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
+              className="fixed right-0 top-0 bottom-0 z-50 w-[280px] bg-dark-surface border-l border-white/[0.07] flex flex-col p-6"
             >
-              <ListItemText
-                primary={isAuthenticated ? 'Salir' : 'Iniciar sesión'}
-                primaryTypographyProps={{ color: 'primary.main', fontWeight: 600 }}
-              />
-            </ListItemButton>
-          </List>
-        </Box>
-      </Drawer>
-    </AppBar>
+              <div className="flex items-center justify-between mb-8">
+                <span className="font-serif text-xl text-white">
+                  H1 <span className="text-lime italic">Canchas</span>
+                </span>
+                <button
+                  onClick={() => setMobileOpen(false)}
+                  className="text-white/60 hover:text-white transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="flex flex-col gap-1">
+                {links.map((link) => (
+                  <Link
+                    key={link.to}
+                    to={link.to}
+                    onClick={() => setMobileOpen(false)}
+                    className={cn(
+                      'px-4 py-3 rounded-lg text-sm font-medium transition-all',
+                      isActive(link.to)
+                        ? 'text-white bg-white/10'
+                        : 'text-white/60 hover:text-white hover:bg-white/[0.07]',
+                    )}
+                  >
+                    {link.label}
+                  </Link>
+                ))}
+              </div>
+
+              <div className="mt-auto pt-6 border-t border-white/[0.07]">
+                {isAuthenticated ? (
+                  <button
+                    onClick={handleLogout}
+                    className="w-full text-left px-4 py-3 text-sm font-semibold text-white/60 hover:text-white transition-all rounded-lg hover:bg-white/[0.07] active:scale-[0.98]"
+                  >
+                    Salir
+                  </button>
+                ) : (
+                  <Link
+                    to="/login"
+                    onClick={() => setMobileOpen(false)}
+                    className="block w-full text-center bg-primary text-white font-bold rounded-lg px-4 py-3 text-sm transition-all hover:bg-primary-dark active:scale-[0.98]"
+                  >
+                    Iniciar sesión
+                  </Link>
+                )}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+    </>
   );
 }

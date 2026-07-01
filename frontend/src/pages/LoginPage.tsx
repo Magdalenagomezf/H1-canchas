@@ -1,25 +1,14 @@
 import { useState } from 'react';
-import { useNavigate, useLocation, Link } from 'react-router-dom';
-import type { Location } from 'react-router-dom';
+import { useNavigate, useLocation, type Location } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
-import Box from '@mui/material/Box';
-import Card from '@mui/material/Card';
-import CardContent from '@mui/material/CardContent';
-import Typography from '@mui/material/Typography';
-import TextField from '@mui/material/TextField';
-import Button from '@mui/material/Button';
-import Alert from '@mui/material/Alert';
-import Tabs from '@mui/material/Tabs';
-import Tab from '@mui/material/Tab';
-import InputAdornment from '@mui/material/InputAdornment';
-import IconButton from '@mui/material/IconButton';
-import VisibilityIcon from '@mui/icons-material/Visibility';
-import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
-import { motion } from 'framer-motion';
+import { Eye, EyeOff, Phone, Lock, User } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { login, register } from '../api/auth';
 import { useAuth } from '../hooks/useAuth';
+import { cn } from '@/lib/utils';
 
-const MotionCard = motion(Card);
+const inputClass =
+  'w-full py-3 bg-surface border-[1.5px] border-black/10 rounded-lg text-sm font-medium text-ink placeholder:text-ink-2/60 outline-none transition-all duration-normal focus:border-primary focus:ring-2 focus:ring-primary/[0.13]';
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -27,165 +16,207 @@ export default function LoginPage() {
   const { setAuth } = useAuth();
 
   const state = location.state as { from?: Location; tab?: string } | null;
-  const redirectTo = state?.from ? state.from.pathname + (state.from.search ?? '') : '/';
+  const redirectTo = state?.from
+    ? state.from.pathname + (state.from.search ?? '')
+    : '/';
 
   const [tab, setTab] = useState<0 | 1>(state?.tab === 'register' ? 1 : 0);
-  const [showPassword, setShowPassword] = useState(false);
 
-  const [loginForm, setLoginForm] = useState({ phone: '', password: '' });
-  const [registerForm, setRegisterForm] = useState({ name: '', phone: '', password: '' });
+  const [loginPhone, setLoginPhone] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [showLoginPass, setShowLoginPass] = useState(false);
+
+  const [regName, setRegName] = useState('');
+  const [regPhone, setRegPhone] = useState('');
+  const [regPassword, setRegPassword] = useState('');
+  const [showRegPass, setShowRegPass] = useState(false);
 
   const loginMutation = useMutation({
-    mutationFn: () => login(loginForm.phone, loginForm.password),
-    onSuccess: (data) => {
-      setAuth(data.user, data.token);
+    mutationFn: () => login(loginPhone, loginPassword),
+    onSuccess: ({ user, token }) => {
+      setAuth(user, token);
       navigate(redirectTo, { replace: true });
     },
   });
 
   const registerMutation = useMutation({
-    mutationFn: () => register(registerForm.name, registerForm.phone, registerForm.password),
-    onSuccess: (data) => {
-      setAuth(data.user, data.token);
+    mutationFn: () => register(regName, regPhone, regPassword),
+    onSuccess: ({ user, token }) => {
+      setAuth(user, token);
       navigate(redirectTo, { replace: true });
     },
   });
 
-  const isLogin = tab === 0;
-  const mutation = isLogin ? loginMutation : registerMutation;
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    mutation.mutate();
+  const handleTabChange = (next: 0 | 1) => {
+    setTab(next);
+    loginMutation.reset();
+    registerMutation.reset();
   };
 
+  const error = tab === 0 ? loginMutation.error?.message : registerMutation.error?.message;
+  const isPending = tab === 0 ? loginMutation.isPending : registerMutation.isPending;
+
   return (
-    <Box
-      sx={{
-        minHeight: 'calc(100vh - 64px)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: 'linear-gradient(160deg, #2D5A3D 0%, #3D7A4E 50%, #5A9E6A 100%)',
-        p: 2,
-      }}
-    >
-      <MotionCard
-        initial={{ opacity: 0, y: 24 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.45, ease: 'easeOut' }}
-        sx={{ width: '100%', maxWidth: 420, overflow: 'visible' }}
-      >
-        <CardContent sx={{ p: { xs: 3, sm: 4 } }}>
-          {/* Logo */}
-          <Typography
-            component={Link}
-            to="/"
-            variant="h4"
-            sx={{
-              display: 'block',
-              textAlign: 'center',
-              textDecoration: 'none',
-              color: 'primary.dark',
-              mb: 3,
-            }}
-          >
-            H1 Canchas
-          </Typography>
+    <div className="animate-fade-up min-h-[calc(100vh-58px)] bg-bg flex items-center justify-center px-4 py-16">
+      <div className="w-full max-w-md">
 
-          {/* Tabs */}
-          <Tabs
-            value={tab}
-            onChange={(_, v) => {
-              setTab(v);
-              mutation.reset();
-            }}
-            variant="fullWidth"
-            sx={{ mb: 3, '& .MuiTab-root': { fontWeight: 600 } }}
-          >
-            <Tab label="Iniciar sesión" />
-            <Tab label="Registrarse" />
-          </Tabs>
+        {/* Header */}
+        <div className="text-center mb-8">
+          <h1 className="font-serif text-4xl text-ink tracking-tight mb-1.5">
+            {tab === 0 ? 'Bienvenido' : 'Crear cuenta'}
+          </h1>
+          <p className="text-sm text-ink-2">
+            {tab === 0
+              ? 'Ingresá para gestionar tus reservas'
+              : 'Es gratis y lleva menos de un minuto'}
+          </p>
+        </div>
 
-          {/* Error */}
-          {mutation.isError && (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              {(mutation.error as Error).message}
-            </Alert>
-          )}
+        {/* Card */}
+        <div className="bg-white rounded-xl border-[1.5px] border-black/[0.07] shadow-md p-6">
 
-          <Box component="form" onSubmit={handleSubmit} sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {/* Name — solo en registro */}
-            {!isLogin && (
-              <TextField
-                label="Nombre"
-                value={registerForm.name}
-                onChange={(e) => setRegisterForm((f) => ({ ...f, name: e.target.value }))}
-                required
-                autoFocus
-                fullWidth
-              />
+          {/* Tab switcher */}
+          <div className="flex bg-surface rounded-lg p-1 mb-6">
+            {(['Iniciar sesión', 'Registrarme'] as const).map((label, i) => (
+              <button
+                key={label}
+                onClick={() => handleTabChange(i as 0 | 1)}
+                className={cn(
+                  'flex-1 py-2 text-sm font-semibold rounded-md transition-all duration-normal',
+                  tab === i
+                    ? 'bg-white text-ink shadow-sm'
+                    : 'text-ink-2 hover:text-ink',
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          <AnimatePresence mode="wait">
+            {tab === 0 ? (
+              <motion.form
+                key="login"
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 10 }}
+                transition={{ duration: 0.18 }}
+                onSubmit={(e) => { e.preventDefault(); loginMutation.mutate(); }}
+                className="flex flex-col gap-4"
+              >
+                {/* Phone */}
+                <div className="relative">
+                  <Phone size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-2/50 pointer-events-none" />
+                  <input
+                    type="tel"
+                    placeholder="Teléfono"
+                    value={loginPhone}
+                    onChange={(e) => setLoginPhone(e.target.value)}
+                    required
+                    className={cn(inputClass, 'pl-10 pr-4')}
+                  />
+                </div>
+
+                {/* Password */}
+                <div className="relative">
+                  <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-2/50 pointer-events-none" />
+                  <input
+                    type={showLoginPass ? 'text' : 'password'}
+                    placeholder="Contraseña"
+                    value={loginPassword}
+                    onChange={(e) => setLoginPassword(e.target.value)}
+                    required
+                    className={cn(inputClass, 'pl-10 pr-11')}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowLoginPass((v) => !v)}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-ink-2/50 hover:text-ink-2 transition-colors"
+                  >
+                    {showLoginPass ? <EyeOff size={15} /> : <Eye size={15} />}
+                  </button>
+                </div>
+
+                {error && <p className="text-xs text-status-cancelled font-medium">{error}</p>}
+
+                <button
+                  type="submit"
+                  disabled={isPending}
+                  className="bg-primary text-white font-bold rounded-lg px-6 py-3 text-sm transition-all duration-normal ease-smooth hover:bg-primary-dark hover:shadow-glow active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed mt-1"
+                >
+                  {isPending ? 'Ingresando...' : 'Ingresar'}
+                </button>
+              </motion.form>
+            ) : (
+              <motion.form
+                key="register"
+                initial={{ opacity: 0, x: 10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                transition={{ duration: 0.18 }}
+                onSubmit={(e) => { e.preventDefault(); registerMutation.mutate(); }}
+                className="flex flex-col gap-4"
+              >
+                {/* Name */}
+                <div className="relative">
+                  <User size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-2/50 pointer-events-none" />
+                  <input
+                    type="text"
+                    placeholder="Nombre completo"
+                    value={regName}
+                    onChange={(e) => setRegName(e.target.value)}
+                    required
+                    className={cn(inputClass, 'pl-10 pr-4')}
+                  />
+                </div>
+
+                {/* Phone */}
+                <div className="relative">
+                  <Phone size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-2/50 pointer-events-none" />
+                  <input
+                    type="tel"
+                    placeholder="Teléfono"
+                    value={regPhone}
+                    onChange={(e) => setRegPhone(e.target.value)}
+                    required
+                    className={cn(inputClass, 'pl-10 pr-4')}
+                  />
+                </div>
+
+                {/* Password */}
+                <div className="relative">
+                  <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-2/50 pointer-events-none" />
+                  <input
+                    type={showRegPass ? 'text' : 'password'}
+                    placeholder="Contraseña"
+                    value={regPassword}
+                    onChange={(e) => setRegPassword(e.target.value)}
+                    required
+                    className={cn(inputClass, 'pl-10 pr-11')}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowRegPass((v) => !v)}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-ink-2/50 hover:text-ink-2 transition-colors"
+                  >
+                    {showRegPass ? <EyeOff size={15} /> : <Eye size={15} />}
+                  </button>
+                </div>
+
+                {error && <p className="text-xs text-status-cancelled font-medium">{error}</p>}
+
+                <button
+                  type="submit"
+                  disabled={isPending}
+                  className="bg-primary text-white font-bold rounded-lg px-6 py-3 text-sm transition-all duration-normal ease-smooth hover:bg-primary-dark hover:shadow-glow active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed mt-1"
+                >
+                  {isPending ? 'Creando cuenta...' : 'Crear cuenta'}
+                </button>
+              </motion.form>
             )}
-
-            {/* Phone */}
-            <TextField
-              label="Teléfono"
-              type="tel"
-              value={isLogin ? loginForm.phone : registerForm.phone}
-              onChange={(e) =>
-                isLogin
-                  ? setLoginForm((f) => ({ ...f, phone: e.target.value }))
-                  : setRegisterForm((f) => ({ ...f, phone: e.target.value }))
-              }
-              required
-              autoFocus={isLogin}
-              fullWidth
-            />
-
-            {/* Password */}
-            <TextField
-              label="Contraseña"
-              type={showPassword ? 'text' : 'password'}
-              value={isLogin ? loginForm.password : registerForm.password}
-              onChange={(e) =>
-                isLogin
-                  ? setLoginForm((f) => ({ ...f, password: e.target.value }))
-                  : setRegisterForm((f) => ({ ...f, password: e.target.value }))
-              }
-              required
-              fullWidth
-              slotProps={{
-                input: {
-                  endAdornment: (
-                    <InputAdornment position="end">
-                      <IconButton onClick={() => setShowPassword((v) => !v)} edge="end">
-                        {showPassword ? <VisibilityOffIcon /> : <VisibilityIcon />}
-                      </IconButton>
-                    </InputAdornment>
-                  ),
-                },
-              }}
-            />
-
-            <Button
-              type="submit"
-              variant="contained"
-              size="large"
-              disabled={mutation.isPending}
-              fullWidth
-              sx={{ mt: 1 }}
-            >
-              {mutation.isPending
-                ? isLogin
-                  ? 'Ingresando...'
-                  : 'Creando cuenta...'
-                : isLogin
-                  ? 'Iniciar sesión'
-                  : 'Crear cuenta'}
-            </Button>
-          </Box>
-        </CardContent>
-      </MotionCard>
-    </Box>
+          </AnimatePresence>
+        </div>
+      </div>
+    </div>
   );
 }

@@ -1,17 +1,29 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Outfit:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=DM+Serif+Display:ital@0;1&display=swap');
+@import "tailwindcss";
+@config "../tailwind.config.ts";
 
-*, *::before, *::after {
-  box-sizing: border-box;
+:root {
+  --radius: 13px;
 }
 
+* { box-sizing: border-box; }
+
 body {
-  margin: 0;
-  background-color: #EFEFEC;
   font-family: 'Outfit', sans-serif;
+  background-color: #EEF4EC;
+  color: #1C2E26;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-#root {
-  min-height: 100vh;
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #A8C97F; border-radius: 999px; }
+
+::selection { background: rgba(61,107,80,.2); color: #1C2E26; }
+
+:focus-visible {
+  outline: 2px solid #3D6B50;
+  outline-offset: 2px;
+  border-radius: 6px;
 }

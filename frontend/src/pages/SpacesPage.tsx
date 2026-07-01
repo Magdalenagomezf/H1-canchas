@@ -1,119 +1,96 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import Box from '@mui/material/Box';
-import Container from '@mui/material/Container';
-import Typography from '@mui/material/Typography';
-import Chip from '@mui/material/Chip';
-import Grid from '@mui/material/Grid';
-import SportsTennisIcon from '@mui/icons-material/SportsTennis';
-import SportsSoccerIcon from '@mui/icons-material/SportsSoccer';
-import CelebrationIcon from '@mui/icons-material/Celebration';
-import GridViewIcon from '@mui/icons-material/GridView';
+import { LayoutGrid } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { getSpaces } from '../api/spaces';
 import { SpaceCard, SpaceCardSkeleton } from '../components/SpaceCard';
 import type { SpaceType } from '../types';
+import { cn } from '@/lib/utils';
 
-const MotionBox = motion(Box);
+type Filter = SpaceType | null;
 
-type Filter = SpaceType | 'all';
-
-const FILTERS: { value: Filter; label: string; icon: React.ReactNode }[] = [
-  { value: 'all', label: 'Todos', icon: <GridViewIcon fontSize="small" /> },
-  { value: 'cancha_padel', label: 'Pádel', icon: <SportsTennisIcon fontSize="small" /> },
-  { value: 'cancha_futbol', label: 'Fútbol', icon: <SportsSoccerIcon fontSize="small" /> },
-  { value: 'quincho', label: 'Quincho / Salón', icon: <CelebrationIcon fontSize="small" /> },
+const FILTERS: { label: string; value: Filter }[] = [
+  { label: 'Todos', value: null },
+  { label: 'Pádel', value: 'cancha_padel' },
+  { label: 'Fútbol', value: 'cancha_futbol' },
+  { label: 'Quincho', value: 'quincho' },
 ];
 
 export default function SpacesPage() {
-  const [filter, setFilter] = useState<Filter>('all');
+  const [filter, setFilter] = useState<Filter>(null);
 
   const { data: spaces, isLoading } = useQuery({
     queryKey: ['spaces'],
     queryFn: getSpaces,
   });
 
-  const filtered = filter === 'all' ? spaces : spaces?.filter((s) => s.type === filter);
+  const filtered = filter ? spaces?.filter((s) => s.type === filter) : spaces;
 
   return (
-    <Box>
+    <div className="animate-fade-up min-h-[calc(100vh-58px)] bg-bg">
+
       {/* Header */}
-      <Box
-        sx={{
-          background: 'linear-gradient(160deg, #2D5A3D 0%, #3D7A4E 60%, #5A9E6A 100%)',
-          py: { xs: 6, md: 8 },
-        }}
-      >
-        <Container maxWidth="lg">
-          <MotionBox
-            initial={{ opacity: 0, y: 20 }}
+      <div className="bg-surface border-b border-black/[0.06]">
+        <div className="max-w-[1140px] mx-auto px-6 py-12">
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
+            transition={{ duration: 0.4 }}
           >
-            <Typography
-              variant="h2"
-              sx={{ color: '#fff', fontSize: { xs: '2rem', md: '3rem' }, mb: 1.5 }}
-            >
+            <span className="text-2xs font-bold tracking-[0.1em] uppercase text-primary mb-1.5 block">
+              Disponibles ahora
+            </span>
+            <h1 className="font-serif text-4xl text-ink tracking-tight mb-6">
               Nuestros espacios
-            </Typography>
-            <Typography sx={{ color: 'rgba(255,255,255,0.8)', fontSize: '1.05rem' }}>
-              Elegí el espacio que más te convenga y reservá tu turno al instante.
-            </Typography>
-          </MotionBox>
-        </Container>
-      </Box>
+            </h1>
 
-      <Container maxWidth="lg" sx={{ py: { xs: 5, md: 8 } }}>
-        {/* Filtros */}
-        <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', mb: 5 }}>
-          {FILTERS.map((f) => (
-            <Chip
-              key={f.value}
-              icon={f.icon as React.ReactElement}
-              label={f.label}
-              clickable
-              onClick={() => setFilter(f.value)}
-              variant={filter === f.value ? 'filled' : 'outlined'}
-              sx={{
-                fontWeight: 600,
-                fontSize: '0.9rem',
-                px: 0.5,
-                ...(filter === f.value
-                  ? { bgcolor: 'primary.main', color: '#fff', '& .MuiChip-icon': { color: '#fff' } }
-                  : { borderColor: 'primary.main', color: 'primary.main', '& .MuiChip-icon': { color: 'primary.main' } }),
-              }}
-            />
-          ))}
-        </Box>
+            {/* Filter chips */}
+            <div className="flex flex-wrap gap-2">
+              {FILTERS.map((f) => (
+                <button
+                  key={f.label}
+                  onClick={() => setFilter(f.value)}
+                  className={cn(
+                    'rounded-full px-4 py-1.5 text-sm font-semibold transition-all duration-normal active:scale-[0.98]',
+                    filter === f.value
+                      ? 'bg-primary text-white shadow-sm'
+                      : 'bg-white border-[1.5px] border-black/[0.07] text-ink-2 hover:border-primary/40 hover:text-ink',
+                  )}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          </motion.div>
+        </div>
+      </div>
 
-        {/* Grid */}
-        <Grid container spacing={3}>
-          {isLoading
-            ? Array.from({ length: 3 }).map((_, i) => (
-                <Grid key={i} size={{ xs: 12, sm: 6, md: 4 }}>
-                  <SpaceCardSkeleton />
-                </Grid>
-              ))
-            : filtered?.length === 0
-              ? (
-                <Grid size={12}>
-                  <Box sx={{ textAlign: 'center', py: 10 }}>
-                    <Typography variant="h5" color="text.secondary" sx={{ mb: 1 }}>
-                      No hay espacios de este tipo disponibles
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      Probá con otro filtro o volvé más tarde.
-                    </Typography>
-                  </Box>
-                </Grid>
-              )
-              : filtered?.map((space, i) => (
-                  <Grid key={space.id} size={{ xs: 12, sm: 6, md: 4 }}>
-                    <SpaceCard space={space} index={i} />
-                  </Grid>
-                ))}
-        </Grid>
-      </Container>
-    </Box>
+      {/* Grid */}
+      <div className="max-w-[1140px] mx-auto px-6 py-10">
+        {isLoading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+            {Array.from({ length: 3 }).map((_, i) => <SpaceCardSkeleton key={i} />)}
+          </div>
+        ) : !filtered?.length ? (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.96 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="flex flex-col items-center justify-center py-24 text-center"
+          >
+            <div className="w-14 h-14 rounded-xl bg-surface flex items-center justify-center mb-4">
+              <LayoutGrid size={24} className="text-ink-2/50" />
+            </div>
+            <p className="text-base font-semibold text-ink mb-1">Sin resultados</p>
+            <p className="text-sm text-ink-2">No hay espacios en esta categoría por el momento.</p>
+          </motion.div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+            {filtered.map((space, i) => (
+              <SpaceCard key={space.id} space={space} index={i} />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }

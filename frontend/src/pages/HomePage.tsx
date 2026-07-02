@@ -9,26 +9,30 @@ import { useAuth } from '../hooks/useAuth';
 const STEPS = [
   {
     icon: Trophy,
+    label: 'PASO 1',
     title: 'Elegí tu espacio',
-    desc: 'Explorá nuestras canchas de pádel, fútbol y quinchos disponibles.',
+    desc: 'Explorá las canchas y quinchos disponibles. Si es tu primera vez, te pedimos que te registres gratis.',
   },
   {
     icon: CalendarDays,
+    label: 'PASO 2',
     title: 'Seleccioná fecha y turno',
     desc: 'Chequeá la disponibilidad en tiempo real y elegí el horario que más te convenga.',
   },
   {
     icon: CheckCircle2,
+    label: 'PASO 3',
     title: 'Confirmá tu reserva',
     desc: 'Recibís la confirmación al instante. ¡Listo para jugar!',
   },
 ];
 
 const FEATURES = [
-  'Canchas techadas',
-  'Iluminación LED',
-  'Vestuarios propios',
   'Estacionamiento',
+  'Quinchos con parrilla',
+  'Zona comercial',
+  'Canchas al aire libre',
+  'Canchas techadas',
 ];
 
 export default function HomePage() {
@@ -40,9 +44,9 @@ export default function HomePage() {
     <div className="animate-fade-up">
 
       {/* ── Hero — único bloque oscuro ── */}
-      <section className="relative min-h-[88vh] bg-dark-surface flex items-center overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-dark to-dark-surface pointer-events-none" />
-        <div className="absolute top-1/3 right-[10%] w-[400px] h-[400px] rounded-full bg-lime/[0.13] blur-[100px] pointer-events-none" />
+      <section className="relative min-h-[88vh] bg-dark-2 flex items-center overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-dark-2 to-dark pointer-events-none" />
+        <div className="absolute top-1/3 right-[10%] w-[400px] h-[400px] rounded-full bg-primary/[0.15] blur-[120px] pointer-events-none" />
         <div className="absolute bottom-1/4 left-[15%] w-[240px] h-[240px] rounded-full bg-white/[0.04] blur-[80px] pointer-events-none" />
 
         <div className="max-w-[1140px] mx-auto px-6 py-24 relative z-10">
@@ -50,28 +54,26 @@ export default function HomePage() {
             initial={{ opacity: 0, y: 32 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, ease: [0.4, 0, 0.2, 1] }}
-            className="max-w-2xl"
+            className="max-w-2xl mx-auto text-center"
           >
             <span className="inline-block text-2xs font-bold tracking-[0.12em] uppercase text-lime mb-5">
-              Reservas online
+              COMPLEJO DEPORTIVO · VALLE VIEJO
             </span>
             <h1 className="font-serif text-5xl text-white tracking-tight leading-[1.06] mb-6">
-              Tu próxima jugada<br />
-              empieza <em className="text-lime not-italic">aquí</em>
+              Pádel, fútbol y quinchos a minutos de casa
             </h1>
-            <p className="text-sm text-white/60 leading-relaxed mb-10 max-w-md">
-              Reservá canchas de pádel, fútbol y quinchos de forma rápida y sencilla.
-              Disponibilidad en tiempo real, sin llamadas ni esperas.
+            <p className="text-sm text-white/60 leading-relaxed mb-10 max-w-md mx-auto">
+              Espacios modernos y cómodos para toda la familia. Todo lo que necesitás en un mismo lugar. Reservá tu turno en minutos.
             </p>
 
-            <div className="flex flex-wrap gap-3">
+            <div className="flex flex-wrap gap-3 justify-center">
               <motion.button
                 whileHover={{ scale: 1.03 }}
                 whileTap={{ scale: 0.97 }}
                 onClick={() => navigate('/canchas')}
                 className="bg-primary text-white font-bold rounded-lg px-6 py-3 text-sm transition-all duration-normal ease-smooth hover:bg-primary-dark hover:shadow-glow active:scale-[0.98] flex items-center gap-2"
               >
-                Ver canchas <ArrowRight size={15} />
+                Reservar ahora <ArrowRight size={15} />
               </motion.button>
 
               {!isAuthenticated && (
@@ -91,7 +93,7 @@ export default function HomePage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.35, duration: 0.5 }}
-            className="flex flex-wrap gap-3 mt-16 pt-10 border-t border-white/[0.10]"
+            className="flex flex-wrap gap-3 mt-16 pt-10 border-t border-white/[0.10] justify-center"
           >
             {FEATURES.map((f) => (
               <span
@@ -128,8 +130,8 @@ export default function HomePage() {
             {isLoading
               ? Array.from({ length: 3 }).map((_, i) => <SpaceCardSkeleton key={i} />)
               : spaces?.map((space, i) => (
-                  <SpaceCard key={space.id} space={space} index={i} />
-                ))}
+                <SpaceCard key={space.id} space={space} index={i} />
+              ))}
           </div>
         </div>
       </section>
@@ -144,7 +146,7 @@ export default function HomePage() {
             className="mb-12"
           >
             <span className="text-2xs font-bold tracking-[0.1em] uppercase text-primary mb-1.5 block">
-              Simple y rápido
+              SIMPLE Y RÁPIDO
             </span>
             <h2 className="font-serif text-4xl text-ink tracking-tight">
               ¿Cómo funciona?
@@ -165,7 +167,7 @@ export default function HomePage() {
                   <step.icon size={20} className="text-primary" />
                 </div>
                 <div className="text-2xs font-bold tracking-[0.1em] uppercase text-ink-2 mb-2">
-                  Paso {i + 1}
+                  {step.label}
                 </div>
                 <h3 className="text-base font-bold text-ink mb-2">{step.title}</h3>
                 <p className="text-sm text-ink-2 leading-relaxed">{step.desc}</p>

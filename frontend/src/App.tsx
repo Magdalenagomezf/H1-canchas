@@ -16,7 +16,11 @@ function PrivateRoute() {
 
 function PublicOnlyRoute() {
   const { isAuthenticated } = useAuth();
-  return isAuthenticated ? <Navigate to="/" replace /> : <Outlet />;
+  const location = useLocation();
+  const state = location.state as { from?: { pathname: string; search?: string }; pendingBooking?: { date: string; slotId: number } } | null;
+  if (!isAuthenticated) return <Outlet />;
+  const target = state?.from ? state.from.pathname + (state.from.search ?? '') : '/';
+  return <Navigate to={target} state={state?.pendingBooking ? { pendingBooking: state.pendingBooking } : undefined} replace />;
 }
 
 function StaffRoute() {

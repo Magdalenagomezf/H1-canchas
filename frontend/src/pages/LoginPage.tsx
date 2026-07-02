@@ -15,10 +15,11 @@ export default function LoginPage() {
   const location = useLocation();
   const { setAuth } = useAuth();
 
-  const state = location.state as { from?: Location; tab?: string } | null;
+  const state = location.state as { from?: Location; tab?: string; pendingBooking?: { date: string; slotId: number } } | null;
   const redirectTo = state?.from
     ? state.from.pathname + (state.from.search ?? '')
     : '/';
+  const pendingBooking = state?.pendingBooking;
 
   const [tab, setTab] = useState<0 | 1>(state?.tab === 'register' ? 1 : 0);
 
@@ -35,7 +36,7 @@ export default function LoginPage() {
     mutationFn: () => login(loginPhone, loginPassword),
     onSuccess: ({ user, token }) => {
       setAuth(user, token);
-      navigate(redirectTo, { replace: true });
+      navigate(redirectTo, { replace: true, state: pendingBooking ? { pendingBooking } : undefined });
     },
   });
 
@@ -43,7 +44,7 @@ export default function LoginPage() {
     mutationFn: () => register(regName, regPhone, regPassword),
     onSuccess: ({ user, token }) => {
       setAuth(user, token);
-      navigate(redirectTo, { replace: true });
+      navigate(redirectTo, { replace: true, state: pendingBooking ? { pendingBooking } : undefined });
     },
   });
 

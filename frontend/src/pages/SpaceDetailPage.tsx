@@ -33,8 +33,9 @@ export default function SpaceDetailPage() {
   const location = useLocation();
   const { isAuthenticated } = useAuth();
 
-  const [date, setDate] = useState(today);
-  const [selectedSlot, setSelectedSlot] = useState<number | null>(null);
+  const locationState = location.state as { pendingBooking?: { date: string; slotId: number } } | null;
+  const [date, setDate] = useState(locationState?.pendingBooking?.date ?? today);
+  const [selectedSlot, setSelectedSlot] = useState<number | null>(locationState?.pendingBooking?.slotId ?? null);
   const [booked, setBooked] = useState(false);
   const [imgIndex, setImgIndex] = useState(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -59,7 +60,7 @@ export default function SpaceDetailPage() {
 
   const handleConfirm = () => {
     if (!isAuthenticated) {
-      navigate('/login', { state: { from: location } });
+      navigate('/login', { state: { from: location, pendingBooking: { date, slotId: selectedSlot } } });
       return;
     }
     bookingMutation.mutate();

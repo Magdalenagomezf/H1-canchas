@@ -205,12 +205,24 @@ Si dos requests llegan al mismo tiempo, el primero inserta y el segundo falla en
 
 ## Endpoints diferidos (esperan decisiones de negocio)
 
-- `PATCH /bookings/:id/confirm` — pending → confirmed
-- `PATCH /bookings/:id/complete` — confirmed → completed
+- `PATCH /bookings/:id/complete` — confirmed → completed (sigue diferido)
 
-Preguntas a resolver con el dueño del negocio antes de implementarlos:
-- ¿Quién confirma? ¿El recepcionista manualmente o MercadoPago automáticamente al recibir el pago?
-- ¿Se puede cancelar una reserva ya confirmada (y pagada)? ¿Hay reembolso?
+`PATCH /bookings/:id/confirm` ya no aplica tal cual: la confirmación de una reserva online pasa a ser automática cuando el webhook de Mercado Pago confirma el pago de la seña (ver sección siguiente). La pregunta de cancelación/reembolso ya se resolvió — ver "Integración de pagos".
+
+---
+
+## Integración de pagos — Mercado Pago (decisiones de negocio)
+
+Decisiones tomadas con el dueño del negocio al planificar la integración de Checkout Pro. Documentadas acá para poder revisarlas/cambiarlas más adelante sin tener que reconstruir el contexto.
+
+- **Modelo de pago en dos partes**: toda reserva se paga en dos tramos, nunca de una. Una **seña (`deposit`)** del **15% fijo** de `total_price` (por ahora fijo vía env var, no por espacio) que se cobra para confirmar la reserva, y un **saldo (`balance`)** con el 85% restante, que se cobra después. Ambos tramos son pagables **por Mercado Pago (link) o manualmente** (efectivo/transferencia/posnet) — no hay un tramo "solo online" y otro "solo manual". Cada booking tiene entonces `deposit_status` y `balance_status` independientes (no un único `payment_status`).
+- **Hold de disponibilidad**: al crear una reserva online, el slot queda `pending` con un **hold de 20 minutos**. Si la seña no se paga en ese lapso, el slot se libera automáticamente (transición a estado `expired`, no revive el índice de disponibilidad).
+- **Checkout**: redirect a Mercado Pago (Checkout Pro clásico con `init_point`), no Bricks embebido.
+- **Reservas manuales del staff** (`CreateManual`, por teléfono o presencial): siguen confirmándose directo, **sin pasar por Mercado Pago automáticamente** — se asume que el staff ya coordinó con el cliente. El staff puede después, para esa misma reserva: (a) generar un link de pago de Mercado Pago (de la seña o del saldo), o (b) marcar manualmente cualquiera de los dos tramos como pagado, registrando el método (efectivo/transferencia/posnet).
+- **Cancelación**: el cliente puede cancelar su propia reserva libremente mientras la **seña** no esté pagada (aunque el pago esté en curso/`pending`). Una vez que la seña se acreditó, **solo el staff puede cancelar** esa reserva. El reembolso, si corresponde, se gestiona **manualmente fuera del sistema** (dashboard de MP o devolución directa) — la v1 no llama a la API de reembolsos de Mercado Pago.
+- **Caso límite — pago tardío**: si el pago de la seña se acredita después de que el slot ya expiró (y posiblemente fue tomado por otra persona), el sistema **no revive la reserva vencida**, pero sí registra el pago como recibido para que el staff lo resuelva a mano (reembolso o reubicación del cliente).
+- **Webhook**: nunca se confía en el payload de la notificación — siempre se vuelve a consultar el pago contra la API de Mercado Pago, y se valida el header `x-signature` (HMAC-SHA256). El manejo es idempotente (Mercado Pago puede reenviar la misma notificación más de una vez).
+- **Ambiente**: se arranca con credenciales sandbox de Mercado Pago; pasar a producción es solo cambiar variables de entorno, sin cambios de código. Testing del webhook en desarrollo vía túnel (ngrok/Cloudflare) apuntando al backend local, porque Mercado Pago no puede llamar a `localhost`.
 
 ---
 
@@ -219,7 +231,7 @@ Preguntas a resolver con el dueño del negocio antes de implementarlos:
 ### Backend
 1. **Tabla `space_blocks`** — bloquear una cancha en fecha puntual (feriado, mantenimiento). Campos: `space_id`, `slot_id` (nullable = bloquea el día completo), `block_date`, `reason`, `created_by`.
 
-2. **Campo `payment_status` en bookings** — `no_pagada / pendiente_pago / pagada / reembolsada`. Se agrega al integrar MercadoPago.
+2. ~~Campo `payment_status` en bookings~~ — en implementación como parte de la integración de Mercado Pago (ver sección "Integración de pagos"), con `deposit_status`/`balance_status` en vez de un único campo.
 
 3. **Paginación** en `GET /bookings` y `GET /spaces`.
 

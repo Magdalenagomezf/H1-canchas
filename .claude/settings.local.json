@@ -5,7 +5,11 @@
       "Bash(Select-Object -First 20)",
       "Bash(Format-Table FullName)",
       "mcp__plugin_engram_engram__mem_context",
-      "mcp__plugin_engram_engram__mem_search"
+      "mcp__plugin_engram_engram__mem_search",
+      "Bash(awk '{sub\\(/\\\\r$/,\"\"\\)} {print}' internal/service/booking_service.go)",
+      "Bash(gofmt -l /tmp/bs_lf.go)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(go test *)"
     ]
   }
 }

@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { useQuery, useMutation } from '@tanstack/react-query';
-import { Trophy, CircleDot, UtensilsCrossed, ArrowLeft, CheckCircle2, Clock } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Trophy, CircleDot, UtensilsCrossed, ArrowLeft, Clock, X } from 'lucide-react';
 import { getSpace, getSlots } from '../api/spaces';
 import { createBooking } from '../api/bookings';
+import { generatePreference } from '../api/payments';
 import { SPACE_IMAGES, SPACE_LABELS } from '../components/SpaceCard';
 import { useAuth } from '../hooks/useAuth';
 import { cn } from '@/lib/utils';
@@ -16,16 +16,37 @@ const SPACE_ICONS: Record<SpaceType, typeof Trophy> = {
   quincho: UtensilsCrossed,
 };
 
+const TZ = 'America/Argentina/Buenos_Aires';
+
+function toArgISO(d: Date): string {
+  return d.toLocaleDateString('en-CA', { timeZone: TZ });
+}
+
 function getNextDays(n: number) {
+  const now = new Date();
   return Array.from({ length: n }, (_, i) => {
-    const d = new Date();
+    const d = new Date(now);
     d.setDate(d.getDate() + i);
     return d;
   });
 }
 
 const DAYS = getNextDays(14);
-const today = DAYS[0].toISOString().split('T')[0];
+const today = toArgISO(DAYS[0]);
+
+function getArgNowMinutes(): number {
+  const [h, m] = new Date().toLocaleTimeString('en-GB', { timeZone: TZ, hour12: false }).split(':');
+  return Number(h) * 60 + Number(m);
+}
+
+function slotStartMinutes(time: string): number {
+  // start_time viene como "HH:MM:SS" o, si la API serializa un TIME sin zona
+  // como datetime completo, como "0000-01-01THH:MM:SSZ" — en ambos casos
+  // la hora es local (Argentina), la "Z" no implica una conversión real a UTC.
+  const clock = time.includes('T') ? time.split('T')[1] : time;
+  const [h, m] = clock.split(':');
+  return Number(h) * 60 + Number(m);
+}
 
 export default function SpaceDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -36,9 +57,11 @@ export default function SpaceDetailPage() {
   const locationState = location.state as { pendingBooking?: { date: string; slotId: number } } | null;
   const [date, setDate] = useState(locationState?.pendingBooking?.date ?? today);
   const [selectedSlot, setSelectedSlot] = useState<number | null>(locationState?.pendingBooking?.slotId ?? null);
-  const [booked, setBooked] = useState(false);
   const [imgIndex, setImgIndex] = useState(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [nowMinutes, setNowMinutes] = useState(() => getArgNowMinutes());
+
+  const queryClient = useQueryClient();
 
   const { data: space, isLoading: spaceLoading } = useQuery({
     queryKey: ['space', id],
@@ -53,9 +76,15 @@ export default function SpaceDetailPage() {
   });
 
   const bookingMutation = useMutation({
-    mutationFn: () =>
-      createBooking({ space_id: Number(id), slot_id: selectedSlot!, booking_date: date }),
-    onSuccess: () => { setBooked(true); setSelectedSlot(null); },
+    mutationFn: async () => {
+      const booking = await createBooking({ space_id: Number(id), slot_id: selectedSlot!, booking_date: date });
+      const preference = await generatePreference(booking.id, 'deposit');
+      return preference;
+    },
+    onSuccess: (preference) => {
+      queryClient.invalidateQueries({ queryKey: ['slots', id, date] });
+      window.location.href = preference.sandbox_init_point;
+    },
   });
 
   const handleConfirm = () => {
@@ -75,6 +104,11 @@ export default function SpaceDetailPage() {
     }, 3000);
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, [images.length]);
+
+  useEffect(() => {
+    const id = setInterval(() => setNowMinutes(getArgNowMinutes()), 30_000);
+    return () => clearInterval(id);
+  }, []);
 
   const handleDotClick = (i: number) => {
     setImgIndex(i);
@@ -166,35 +200,7 @@ export default function SpaceDetailPage() {
         </div>
 
         <div className="border-t border-black/[0.06] pt-8">
-
-          {booked ? (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.96 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="max-w-sm mx-auto bg-white rounded-xl border-[1.5px] border-black/[0.07] shadow-md p-8 text-center"
-            >
-              <div className="w-14 h-14 rounded-full bg-status-confirmed/10 flex items-center justify-center mx-auto mb-4">
-                <CheckCircle2 size={28} className="text-status-confirmed" />
-              </div>
-              <h3 className="font-serif text-2xl text-ink mb-1">¡Reserva confirmada!</h3>
-              <p className="text-sm text-ink-2 mb-6">Tu turno quedó registrado. Te esperamos.</p>
-              <div className="flex flex-col gap-2">
-                <button
-                  onClick={() => navigate('/mis-reservas')}
-                  className="bg-primary text-white font-bold rounded-lg px-6 py-3 text-sm transition-all hover:bg-primary-dark hover:shadow-glow active:scale-[0.98]"
-                >
-                  Ver mis reservas
-                </button>
-                <button
-                  onClick={() => { setBooked(false); setDate(today); }}
-                  className="text-sm text-ink-2 hover:text-ink transition-colors py-2"
-                >
-                  Reservar otro turno
-                </button>
-              </div>
-            </motion.div>
-          ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-10 items-start">
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-10 items-start">
 
               {/* Date + slots */}
               <div>
@@ -204,11 +210,11 @@ export default function SpaceDetailPage() {
                 </label>
                 <div className="flex gap-2 overflow-x-auto pb-2 -mx-1 px-1">
                   {DAYS.map((d) => {
-                    const iso = d.toISOString().split('T')[0];
+                    const iso = toArgISO(d);
                     const isSelected = date === iso;
-                    const dayName = d.toLocaleDateString('es-AR', { weekday: 'short' });
-                    const dayNum = d.getDate();
-                    const monthName = d.toLocaleDateString('es-AR', { month: 'short' });
+                    const dayName = d.toLocaleDateString('es-AR', { weekday: 'short', timeZone: TZ });
+                    const dayNum = Number(d.toLocaleDateString('en-CA', { day: 'numeric', timeZone: TZ }));
+                    const monthName = d.toLocaleDateString('es-AR', { month: 'short', timeZone: TZ });
                     return (
                       <button
                         key={iso}
@@ -251,20 +257,35 @@ export default function SpaceDetailPage() {
                     </div>
                   ) : (
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                      {slots.map((slot) => (
-                        <button
-                          key={slot.id}
-                          onClick={() => setSelectedSlot(slot.id === selectedSlot ? null : slot.id)}
-                          className={cn(
-                            'flex items-center justify-center px-3 py-3.5 rounded-xl border-[1.5px] text-sm font-bold transition-all duration-normal active:scale-[0.98]',
-                            selectedSlot === slot.id
-                              ? 'bg-primary/[0.08] border-primary text-primary'
-                              : 'bg-white border-black/[0.07] text-ink hover:border-primary/40',
-                          )}
-                        >
-                          {slot.label}
-                        </button>
-                      ))}
+                      {slots.map((slot) => {
+                        const isBooked = slot.available === false;
+                        const isPast = date === today && slot.start_time !== null
+                          && slotStartMinutes(slot.start_time) <= nowMinutes;
+                        const isDisabled = isBooked || isPast;
+                        return (
+                          <button
+                            key={slot.id}
+                            disabled={isDisabled}
+                            onClick={() => !isDisabled && setSelectedSlot(slot.id === selectedSlot ? null : slot.id)}
+                            className={cn(
+                              'relative flex flex-col items-center justify-center px-3 py-3 rounded-xl border-[1.5px] text-sm font-bold transition-all duration-normal',
+                              isDisabled
+                                ? 'bg-surface border-black/[0.05] text-ink-2/40 cursor-not-allowed'
+                                : selectedSlot === slot.id
+                                ? 'bg-primary/[0.08] border-primary text-primary active:scale-[0.98]'
+                                : 'bg-white border-black/[0.07] text-ink hover:border-primary/40 active:scale-[0.98]',
+                            )}
+                          >
+                            {isDisabled && (
+                              <X size={26} strokeWidth={2} className="absolute inset-0 m-auto text-ink-2/25" />
+                            )}
+                            <span className={isDisabled ? 'opacity-60' : undefined}>{slot.label}</span>
+                            {isBooked && (
+                              <span className="text-2xs font-normal mt-0.5 text-ink-2/35">Reservado</span>
+                            )}
+                          </button>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -321,7 +342,6 @@ export default function SpaceDetailPage() {
                 </div>
               </div>
             </div>
-          )}
         </div>
       </div>
     </div>

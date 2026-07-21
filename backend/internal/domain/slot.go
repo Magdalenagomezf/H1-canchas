@@ -11,4 +11,5 @@ type SpaceSlot struct {
 	StartTime   *string `db:"start_time"` // "HH:MM:SS" → viene así de MySQL
 	EndTime     *string `db:"end_time"`
 	IsActive    bool    `db:"is_active"`
+	Available   bool    `db:"available" json:"available"`
 }

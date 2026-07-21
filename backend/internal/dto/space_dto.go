@@ -27,6 +27,7 @@ type SlotResponse struct {
 	Description *string `json:"description,omitempty"`
 	StartTime   *string `json:"start_time,omitempty"`
 	EndTime     *string `json:"end_time,omitempty"`
+	Available   bool    `json:"available"`
 }
 
 // UpdateSpaceRequest es el JSON para editar un espacio existente.

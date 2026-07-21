@@ -275,5 +275,6 @@ func toSlotResponse(s domain.SpaceSlot) dto.SlotResponse {
 		Description: s.Description,
 		StartTime:   s.StartTime,
 		EndTime:     s.EndTime,
+		Available:   s.Available,
 	}
 }

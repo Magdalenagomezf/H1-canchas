@@ -98,17 +98,17 @@ func (r *spaceRepo) GetSlotsBySpaceID(ctx context.Context, spaceID int64) ([]dom
 
 func (r *spaceRepo) GetAvailableSlotsForDate(ctx context.Context, spaceID int64, date string) ([]domain.SpaceSlot, error) {
 	query := `
-        SELECT ss.id, ss.space_id, ss.label, ss.description, ss.start_time, ss.end_time, ss.is_active
-        FROM space_slots ss
-        WHERE ss.space_id = $1
-          AND ss.is_active = true
-          AND NOT EXISTS (
+        SELECT ss.id, ss.space_id, ss.label, ss.description, ss.start_time, ss.end_time, ss.is_active,
+          NOT EXISTS (
               SELECT 1 FROM bookings b
               WHERE b.space_id = ss.space_id
                 AND b.slot_id = ss.id
                 AND b.booking_date = $2::date
                 AND b.status IN ('pending', 'confirmed')
-          )
+          ) AS available
+        FROM space_slots ss
+        WHERE ss.space_id = $1
+          AND ss.is_active = true
         ORDER BY ss.start_time`
 
 	var slots []domain.SpaceSlot

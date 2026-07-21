@@ -2,18 +2,24 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   CalendarDays, Clock, User, Phone, XCircle, Plus, ChevronLeft, ChevronRight,
-  Pencil, Trash2, ShieldCheck,
+  Pencil, Trash2, ShieldCheck, Repeat, Wrench, Ban,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { getAllBookings, cancelBooking, createManualBooking } from '../api/bookings';
+import {
+  getAllBookings, cancelBooking, createManualBooking,
+  createRecurringBooking, createMaintenanceBlock, getBatches, cancelBatch,
+} from '../api/bookings';
 import { getSpaces, getSlots, createSpace, updateSpace, deleteSpace } from '../api/spaces';
 import { getUsers, createStaffUser, updateUserRole, deleteUser } from '../api/users';
-import type { BookingDetail, BookingStatus } from '../types';
+import type { BookingDetail, BookingStatus, BookingBatch } from '../types';
 import { SPACE_LABELS, SPACE_ICONS } from '../components/SpaceCard';
 import { useAuth } from '../hooks/useAuth';
 import { cn } from '@/lib/utils';
 
-type Tab = 'bookings' | 'spaces' | 'users';
+type Tab = 'bookings' | 'fixed' | 'spaces' | 'users';
+
+const WEEKDAYS_SHORT = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+const WEEKDAYS_LONG = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
 
 const STATUS_CONFIG: Record<BookingStatus, { label: string; classes: string }> = {
   pending:   { label: 'Pendiente',  classes: 'bg-status-pending/10 text-status-pending' },
@@ -22,19 +28,25 @@ const STATUS_CONFIG: Record<BookingStatus, { label: string; classes: string }> =
   completed: { label: 'Completada', classes: 'bg-status-completed/10 text-status-completed' },
 };
 
+const TZ = 'America/Argentina/Buenos_Aires';
+
+function toArgISO(d: Date): string {
+  return d.toLocaleDateString('en-CA', { timeZone: TZ });
+}
+
 function formatDate(iso: string) {
   return new Date(iso + 'T12:00:00').toLocaleDateString('es-AR', {
-    weekday: 'long', day: 'numeric', month: 'long',
+    weekday: 'long', day: 'numeric', month: 'long', timeZone: TZ,
   });
 }
 
 function shiftDate(iso: string, days: number) {
   const d = new Date(iso + 'T12:00:00');
   d.setDate(d.getDate() + days);
-  return d.toISOString().split('T')[0];
+  return toArgISO(d);
 }
 
-const today = new Date().toISOString().split('T')[0];
+const today = toArgISO(new Date());
 
 // ── Booking card ──────────────────────────────────────────────────────────────
 function BookingRow({
@@ -63,6 +75,12 @@ function BookingRow({
           <span className={cn('shrink-0 inline-flex items-center rounded-full px-2 py-0.5 text-2xs font-bold uppercase tracking-wide', status.classes)}>
             {status.label}
           </span>
+          {booking.batch && (
+            <span className="shrink-0 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-2xs font-bold uppercase tracking-wide bg-primary/10 text-primary">
+              {booking.batch.type === 'recurring_teacher' ? <Repeat size={10} /> : <Wrench size={10} />}
+              {booking.batch.type === 'recurring_teacher' ? 'Turno fijo' : 'Mantenimiento'}
+            </span>
+          )}
         </div>
         <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-ink-2">
           <span className="flex items-center gap-1.5">
@@ -73,6 +91,9 @@ function BookingRow({
             {SPACE_LABELS[booking.space.type]}
           </span>
         </div>
+        {booking.batch && (
+          <p className="text-sm text-ink-2 mt-1 truncate">{booking.batch.reason}</p>
+        )}
       </div>
 
       {/* Customer */}
@@ -270,6 +291,470 @@ function ManualBookingDialog({
         </form>
       </motion.div>
     </>
+  );
+}
+
+// ── Recurring booking dialog (turno fijo semanal) ─────────────────────────────
+function RecurringBookingDialog({ defaultDate, onClose }: { defaultDate: string; onClose: () => void }) {
+  const queryClient = useQueryClient();
+  const [spaceId, setSpaceId] = useState<number | ''>('');
+  const [weekday, setWeekday] = useState<number | null>(null);
+  const [slotId, setSlotId] = useState<number | ''>('');
+  const [startDate, setStartDate] = useState(defaultDate);
+  const [endDate, setEndDate] = useState('');
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [note, setNote] = useState('');
+  const [result, setResult] = useState<{ created: number; skipped: number } | null>(null);
+
+  const { data: spaces } = useQuery({ queryKey: ['spaces'], queryFn: getSpaces });
+  const { data: slots } = useQuery({
+    queryKey: ['slots', spaceId, startDate],
+    queryFn: () => getSlots(Number(spaceId), startDate),
+    enabled: !!spaceId && !!startDate,
+  });
+
+  const mutation = useMutation({
+    mutationFn: () =>
+      createRecurringBooking({
+        space_id: Number(spaceId),
+        slot_id: Number(slotId),
+        weekday: weekday!,
+        customer_name: name,
+        customer_phone: phone,
+        start_date: startDate,
+        end_date: endDate,
+        note: note || undefined,
+      }),
+    onSuccess: (r) => {
+      queryClient.invalidateQueries({ queryKey: ['batches'] });
+      setResult({ created: r.created_dates.length, skipped: r.skipped_dates.length });
+    },
+  });
+
+  const setOneYear = () => {
+    if (!startDate) return;
+    const d = new Date(startDate + 'T12:00:00');
+    d.setFullYear(d.getFullYear() + 1);
+    setEndDate(d.toISOString().slice(0, 10));
+  };
+
+  const inputClass =
+    'w-full px-3.5 py-2.5 bg-surface border-[1.5px] border-black/10 rounded-lg text-sm font-medium text-ink placeholder:text-ink-2/60 outline-none transition-all duration-normal focus:border-primary focus:ring-2 focus:ring-primary/[0.13]';
+
+  return (
+    <>
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={onClose} />
+      <motion.div initial={{ opacity: 0, scale: 0.94, y: 16 }} animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.94, y: 16 }} transition={{ duration: 0.22 }}
+        className="fixed inset-x-4 bottom-4 sm:inset-auto sm:left-1/2 sm:-translate-x-1/2 sm:top-1/2 sm:-translate-y-1/2 sm:w-[460px] z-50 bg-white rounded-2xl shadow-xl p-6 max-h-[90vh] overflow-y-auto"
+      >
+        {result ? (
+          <>
+            <h3 className="font-serif text-xl text-ink mb-2">Turno fijo creado</h3>
+            <p className="text-sm text-ink-2 mb-1">
+              Se reservaron <strong className="text-ink">{result.created}</strong> fechas.
+            </p>
+            {result.skipped > 0 && (
+              <p className="text-sm text-status-pending mb-4">
+                {result.skipped} fechas ya estaban ocupadas y se saltearon — revisá la lista para ver cuáles.
+              </p>
+            )}
+            <button onClick={onClose} className="w-full bg-primary text-white font-bold rounded-lg py-3 text-sm mt-3 hover:bg-primary-dark active:scale-[0.98] transition-all">
+              Listo
+            </button>
+          </>
+        ) : (
+          <>
+            <h3 className="font-serif text-xl text-ink mb-1">Nuevo turno fijo</h3>
+            <p className="text-sm text-ink-2 mb-5">Repite el mismo turno todas las semanas, para un profesor u otro cliente fijo.</p>
+
+            <form onSubmit={(e) => { e.preventDefault(); mutation.mutate(); }} className="flex flex-col gap-4">
+              <div>
+                <label className="text-2xs font-bold uppercase tracking-wide text-ink-2 mb-1.5 block">Espacio</label>
+                <select value={spaceId} onChange={(e) => { setSpaceId(Number(e.target.value)); setSlotId(''); }} required className={inputClass}>
+                  <option value="">Seleccioná un espacio</option>
+                  {spaces?.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-2xs font-bold uppercase tracking-wide text-ink-2 mb-1.5 block">Día de la semana</label>
+                <div className="grid grid-cols-7 gap-1.5">
+                  {WEEKDAYS_SHORT.map((label, i) => (
+                    <button key={i} type="button" onClick={() => setWeekday(i)}
+                      className={cn(
+                        'py-2 rounded-lg border-[1.5px] text-2xs font-bold transition-all active:scale-[0.96]',
+                        weekday === i ? 'bg-primary/[0.08] border-primary text-primary' : 'bg-surface border-black/[0.07] text-ink-2 hover:border-primary/40',
+                      )}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-2xs font-bold uppercase tracking-wide text-ink-2 mb-1.5 block">Turno</label>
+                {!spaceId ? (
+                  <p className="text-sm text-ink-2/60 py-2">Seleccioná un espacio primero.</p>
+                ) : !slots?.length ? (
+                  <p className="text-sm text-ink-2/60 py-2">Sin turnos para este espacio.</p>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2">
+                    {slots.map((s) => (
+                      <button key={s.id} type="button" onClick={() => setSlotId(s.id)}
+                        className={cn(
+                          'py-2.5 rounded-lg border-[1.5px] text-sm font-semibold transition-all active:scale-[0.98]',
+                          slotId === s.id ? 'bg-primary/[0.08] border-primary text-primary' : 'bg-surface border-black/[0.07] text-ink hover:border-primary/40',
+                        )}
+                      >
+                        {s.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-2xs font-bold uppercase tracking-wide text-ink-2 mb-1.5 block">Desde</label>
+                  <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} required className={inputClass} />
+                </div>
+                <div>
+                  <label className="text-2xs font-bold uppercase tracking-wide text-ink-2 mb-1.5 block">Hasta</label>
+                  <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} required className={inputClass} />
+                </div>
+              </div>
+              <button type="button" onClick={setOneYear} className="text-xs font-semibold text-primary hover:underline self-start -mt-2">
+                Poner 1 año desde la fecha de inicio
+              </button>
+
+              <div>
+                <label className="text-2xs font-bold uppercase tracking-wide text-ink-2 mb-1.5 block">Cliente / profesor</label>
+                <div className="flex flex-col gap-2">
+                  <input type="text" placeholder="Nombre completo" value={name} onChange={(e) => setName(e.target.value)} required className={inputClass} />
+                  <input type="tel" placeholder="Teléfono" value={phone} onChange={(e) => setPhone(e.target.value)} required className={inputClass} />
+                  <input type="text" placeholder="Nota (opcional, ej. 'Clases de pádel')" value={note} onChange={(e) => setNote(e.target.value)} className={inputClass} />
+                </div>
+              </div>
+
+              {mutation.error && <p className="text-xs text-status-cancelled font-medium">{mutation.error.message}</p>}
+
+              <div className="flex gap-3 mt-1">
+                <button type="button" onClick={onClose} className="flex-1 bg-surface text-ink font-semibold rounded-lg py-3 text-sm transition-all hover:bg-surface-2 active:scale-[0.98]">
+                  Cancelar
+                </button>
+                <button type="submit" disabled={!spaceId || weekday === null || !slotId || !startDate || !endDate || !name || !phone || mutation.isPending}
+                  className="flex-1 bg-primary text-white font-bold rounded-lg py-3 text-sm transition-all hover:bg-primary-dark hover:shadow-glow active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {mutation.isPending ? 'Guardando...' : 'Crear turno fijo'}
+                </button>
+              </div>
+            </form>
+          </>
+        )}
+      </motion.div>
+    </>
+  );
+}
+
+// ── Maintenance block dialog ───────────────────────────────────────────────────
+function MaintenanceBlockDialog({ defaultDate, onClose }: { defaultDate: string; onClose: () => void }) {
+  const queryClient = useQueryClient();
+  const [spaceId, setSpaceId] = useState<number | ''>('');
+  const [wholeSpace, setWholeSpace] = useState(true);
+  const [slotId, setSlotId] = useState<number | ''>('');
+  const [startDate, setStartDate] = useState(defaultDate);
+  const [endDate, setEndDate] = useState(defaultDate);
+  const [reason, setReason] = useState('');
+  const [result, setResult] = useState<{ created: number; skipped: number } | null>(null);
+
+  const { data: spaces } = useQuery({ queryKey: ['spaces'], queryFn: getSpaces });
+  const { data: slots } = useQuery({
+    queryKey: ['slots', spaceId, startDate],
+    queryFn: () => getSlots(Number(spaceId), startDate),
+    enabled: !!spaceId && !!startDate && !wholeSpace,
+  });
+
+  const mutation = useMutation({
+    mutationFn: () =>
+      createMaintenanceBlock({
+        space_id: Number(spaceId),
+        slot_id: wholeSpace ? null : Number(slotId),
+        start_date: startDate,
+        end_date: endDate,
+        reason,
+      }),
+    onSuccess: (r) => {
+      queryClient.invalidateQueries({ queryKey: ['batches'] });
+      setResult({ created: r.created_dates.length, skipped: r.skipped_dates.length });
+    },
+  });
+
+  const inputClass =
+    'w-full px-3.5 py-2.5 bg-surface border-[1.5px] border-black/10 rounded-lg text-sm font-medium text-ink placeholder:text-ink-2/60 outline-none transition-all duration-normal focus:border-primary focus:ring-2 focus:ring-primary/[0.13]';
+
+  return (
+    <>
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={onClose} />
+      <motion.div initial={{ opacity: 0, scale: 0.94, y: 16 }} animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.94, y: 16 }} transition={{ duration: 0.22 }}
+        className="fixed inset-x-4 bottom-4 sm:inset-auto sm:left-1/2 sm:-translate-x-1/2 sm:top-1/2 sm:-translate-y-1/2 sm:w-[460px] z-50 bg-white rounded-2xl shadow-xl p-6 max-h-[90vh] overflow-y-auto"
+      >
+        {result ? (
+          <>
+            <h3 className="font-serif text-xl text-ink mb-2">Bloqueo creado</h3>
+            <p className="text-sm text-ink-2 mb-1">
+              Se bloquearon <strong className="text-ink">{result.created}</strong> turnos.
+            </p>
+            {result.skipped > 0 && (
+              <p className="text-sm text-status-pending mb-4">
+                {result.skipped} ya tenían una reserva y se saltearon — esa reserva sigue en pie, contactá al cliente si hace falta reprogramarla.
+              </p>
+            )}
+            <button onClick={onClose} className="w-full bg-primary text-white font-bold rounded-lg py-3 text-sm mt-3 hover:bg-primary-dark active:scale-[0.98] transition-all">
+              Listo
+            </button>
+          </>
+        ) : (
+          <>
+            <h3 className="font-serif text-xl text-ink mb-1">Nuevo bloqueo por mantenimiento</h3>
+            <p className="text-sm text-ink-2 mb-5">Bloquea uno o todos los turnos de una cancha durante un rango de días.</p>
+
+            <form onSubmit={(e) => { e.preventDefault(); mutation.mutate(); }} className="flex flex-col gap-4">
+              <div>
+                <label className="text-2xs font-bold uppercase tracking-wide text-ink-2 mb-1.5 block">Espacio</label>
+                <select value={spaceId} onChange={(e) => { setSpaceId(Number(e.target.value)); setSlotId(''); }} required className={inputClass}>
+                  <option value="">Seleccioná un espacio</option>
+                  {spaces?.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+              </div>
+
+              <div className="flex gap-2">
+                <button type="button" onClick={() => setWholeSpace(true)}
+                  className={cn('flex-1 py-2.5 rounded-lg border-[1.5px] text-sm font-semibold transition-all active:scale-[0.98]',
+                    wholeSpace ? 'bg-primary/[0.08] border-primary text-primary' : 'bg-surface border-black/[0.07] text-ink-2 hover:border-primary/40')}
+                >
+                  Todos los turnos
+                </button>
+                <button type="button" onClick={() => setWholeSpace(false)}
+                  className={cn('flex-1 py-2.5 rounded-lg border-[1.5px] text-sm font-semibold transition-all active:scale-[0.98]',
+                    !wholeSpace ? 'bg-primary/[0.08] border-primary text-primary' : 'bg-surface border-black/[0.07] text-ink-2 hover:border-primary/40')}
+                >
+                  Un turno puntual
+                </button>
+              </div>
+
+              {!wholeSpace && (
+                <div>
+                  <label className="text-2xs font-bold uppercase tracking-wide text-ink-2 mb-1.5 block">Turno</label>
+                  {!spaceId ? (
+                    <p className="text-sm text-ink-2/60 py-2">Seleccioná un espacio primero.</p>
+                  ) : !slots?.length ? (
+                    <p className="text-sm text-ink-2/60 py-2">Sin turnos para este espacio.</p>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2">
+                      {slots.map((s) => (
+                        <button key={s.id} type="button" onClick={() => setSlotId(s.id)}
+                          className={cn(
+                            'py-2.5 rounded-lg border-[1.5px] text-sm font-semibold transition-all active:scale-[0.98]',
+                            slotId === s.id ? 'bg-primary/[0.08] border-primary text-primary' : 'bg-surface border-black/[0.07] text-ink hover:border-primary/40',
+                          )}
+                        >
+                          {s.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-2xs font-bold uppercase tracking-wide text-ink-2 mb-1.5 block">Desde</label>
+                  <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} required className={inputClass} />
+                </div>
+                <div>
+                  <label className="text-2xs font-bold uppercase tracking-wide text-ink-2 mb-1.5 block">Hasta</label>
+                  <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} required className={inputClass} />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-2xs font-bold uppercase tracking-wide text-ink-2 mb-1.5 block">Motivo</label>
+                <input type="text" placeholder="Ej. Cambio de red, poda, pintura..." value={reason} onChange={(e) => setReason(e.target.value)} required className={inputClass} />
+              </div>
+
+              {mutation.error && <p className="text-xs text-status-cancelled font-medium">{mutation.error.message}</p>}
+
+              <div className="flex gap-3 mt-1">
+                <button type="button" onClick={onClose} className="flex-1 bg-surface text-ink font-semibold rounded-lg py-3 text-sm transition-all hover:bg-surface-2 active:scale-[0.98]">
+                  Cancelar
+                </button>
+                <button type="submit" disabled={!spaceId || (!wholeSpace && !slotId) || !startDate || !endDate || !reason || mutation.isPending}
+                  className="flex-1 bg-primary text-white font-bold rounded-lg py-3 text-sm transition-all hover:bg-primary-dark hover:shadow-glow active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {mutation.isPending ? 'Guardando...' : 'Crear bloqueo'}
+                </button>
+              </div>
+            </form>
+          </>
+        )}
+      </motion.div>
+    </>
+  );
+}
+
+// ── Fixed slots panel (turnos fijos + bloqueos) ────────────────────────────────
+function BatchRow({ batch, onCancel }: { batch: BookingBatch; onCancel: (b: BookingBatch) => void }) {
+  const isRecurring = batch.type === 'recurring_teacher';
+  return (
+    <motion.div layout initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.97 }}
+      transition={{ duration: 0.25 }}
+      className="bg-white rounded-xl border-[1.5px] border-black/[0.07] shadow-sm p-4 flex flex-col sm:flex-row sm:items-center gap-4"
+    >
+      <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+        {isRecurring ? <Repeat size={16} className="text-primary" /> : <Wrench size={16} className="text-primary" />}
+      </div>
+
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 mb-1">
+          <span className="text-base font-bold text-ink truncate">{batch.space.name}</span>
+          <span className={cn('shrink-0 inline-flex items-center rounded-full px-2 py-0.5 text-2xs font-bold uppercase tracking-wide',
+            batch.status === 'active' ? 'bg-status-confirmed/10 text-status-confirmed' : 'bg-status-cancelled/10 text-status-cancelled')}>
+            {batch.status === 'active' ? 'Activo' : 'Cancelado'}
+          </span>
+        </div>
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-ink-2">
+          <span className="flex items-center gap-1.5">
+            <Clock size={13} className="text-primary/50" />
+            {batch.slot?.label ?? 'Todos los turnos'}
+          </span>
+          <span className="text-2xs font-bold uppercase tracking-wide text-ink-2/60">
+            {isRecurring && batch.weekday !== undefined
+              ? `Todos los ${WEEKDAYS_LONG[batch.weekday]}s`
+              : `${batch.start_date} → ${batch.end_date}`}
+          </span>
+        </div>
+        <p className="text-sm text-ink mt-1 truncate">{batch.reason}</p>
+      </div>
+
+      {batch.status === 'active' && (
+        <button onClick={() => onCancel(batch)}
+          className="flex items-center gap-1 text-sm font-semibold text-status-cancelled hover:bg-status-cancelled/8 px-2.5 py-1.5 rounded-lg transition-all active:scale-[0.98] shrink-0 self-start sm:self-center"
+        >
+          <Ban size={14} /> Cancelar serie
+        </button>
+      )}
+    </motion.div>
+  );
+}
+
+function FixedSlotsPanel({ defaultDate }: { defaultDate: string }) {
+  const queryClient = useQueryClient();
+  const [showRecurring, setShowRecurring] = useState(false);
+  const [showBlock, setShowBlock] = useState(false);
+  const [cancelTarget, setCancelTarget] = useState<BookingBatch | null>(null);
+
+  const { data: batches, isLoading } = useQuery({ queryKey: ['batches'], queryFn: () => getBatches() });
+
+  const cancelMutation = useMutation({
+    mutationFn: (id: number) => cancelBatch(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['batches'] });
+      queryClient.invalidateQueries({ queryKey: ['all-bookings'] });
+      setCancelTarget(null);
+    },
+  });
+
+  const active = batches?.filter((b) => b.status === 'active') ?? [];
+  const cancelled = batches?.filter((b) => b.status === 'cancelled') ?? [];
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <h2 className="text-2xs font-bold tracking-[0.1em] uppercase text-primary">Turnos fijos y bloqueos</h2>
+        <div className="flex gap-2">
+          <button onClick={() => setShowRecurring(true)} className="flex items-center gap-1.5 bg-primary text-white font-bold rounded-lg px-4 py-2 text-sm transition-all hover:bg-primary-dark active:scale-[0.98]">
+            <Repeat size={14} /> Turno fijo
+          </button>
+          <button onClick={() => setShowBlock(true)} className="flex items-center gap-1.5 bg-surface text-ink font-bold rounded-lg px-4 py-2 text-sm border-[1.5px] border-black/[0.07] transition-all hover:border-primary/40 active:scale-[0.98]">
+            <Wrench size={14} /> Bloqueo
+          </button>
+        </div>
+      </div>
+
+      {isLoading ? (
+        <div className="flex flex-col gap-3">{Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-20 bg-white rounded-xl border-[1.5px] border-black/[0.07] animate-pulse" />)}</div>
+      ) : !batches?.length ? (
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+          <div className="w-14 h-14 rounded-xl bg-surface flex items-center justify-center mb-4">
+            <Repeat size={24} className="text-ink-2/50" />
+          </div>
+          <p className="text-base font-semibold text-ink mb-1">Sin turnos fijos ni bloqueos</p>
+          <p className="text-sm text-ink-2">Creá uno con los botones de arriba.</p>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-8">
+          {active.length > 0 && (
+            <section>
+              <h3 className="text-2xs font-bold tracking-[0.1em] uppercase text-primary mb-3">Activos ({active.length})</h3>
+              <AnimatePresence mode="popLayout">
+                <div className="flex flex-col gap-3">
+                  {active.map((b) => <BatchRow key={b.id} batch={b} onCancel={setCancelTarget} />)}
+                </div>
+              </AnimatePresence>
+            </section>
+          )}
+          {cancelled.length > 0 && (
+            <section>
+              <h3 className="text-2xs font-bold tracking-[0.1em] uppercase text-ink-2 mb-3">Cancelados ({cancelled.length})</h3>
+              <div className="flex flex-col gap-3">
+                {cancelled.map((b) => <BatchRow key={b.id} batch={b} onCancel={setCancelTarget} />)}
+              </div>
+            </section>
+          )}
+        </div>
+      )}
+
+      <AnimatePresence>
+        {cancelTarget && (
+          <>
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={() => setCancelTarget(null)} />
+            <motion.div initial={{ opacity: 0, scale: 0.94, y: 16 }} animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.94, y: 16 }} transition={{ duration: 0.22 }}
+              className="fixed inset-x-4 bottom-6 sm:inset-auto sm:left-1/2 sm:-translate-x-1/2 sm:top-1/2 sm:-translate-y-1/2 sm:w-[400px] z-50 bg-white rounded-2xl shadow-xl p-6"
+            >
+              <h3 className="font-serif text-xl text-ink mb-1">¿Cancelar toda la serie?</h3>
+              <p className="text-sm text-ink-2 mb-6">
+                Se van a cancelar todas las ocurrencias futuras de <strong className="text-ink">{cancelTarget.space.name}</strong>
+                {' — '}{cancelTarget.reason}. Las que ya pasaron quedan como historial.
+              </p>
+              {cancelMutation.error && <p className="text-xs text-status-cancelled mb-3">{cancelMutation.error.message}</p>}
+              <div className="flex gap-3">
+                <button onClick={() => setCancelTarget(null)} className="flex-1 bg-surface text-ink font-semibold rounded-lg py-3 text-sm transition-all hover:bg-surface-2 active:scale-[0.98]">
+                  Volver
+                </button>
+                <button onClick={() => cancelMutation.mutate(cancelTarget.id)} disabled={cancelMutation.isPending}
+                  className="flex-1 bg-status-cancelled/10 border-[1.5px] border-status-cancelled/20 text-status-cancelled font-bold rounded-lg py-3 text-sm transition-all hover:bg-status-cancelled/18 active:scale-[0.98] disabled:opacity-60"
+                >
+                  {cancelMutation.isPending ? 'Cancelando...' : 'Sí, cancelar todo'}
+                </button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showRecurring && <RecurringBookingDialog defaultDate={defaultDate} onClose={() => setShowRecurring(false)} />}
+        {showBlock && <MaintenanceBlockDialog defaultDate={defaultDate} onClose={() => setShowBlock(false)} />}
+      </AnimatePresence>
+    </div>
   );
 }
 
@@ -493,7 +978,7 @@ export default function StaffPanelPage() {
                 {isAdmin ? 'Panel de administración' : 'Panel de recepción'}
               </span>
               <h1 className="font-serif text-4xl text-ink tracking-tight">
-                {tab === 'bookings' ? 'Reservas del día' : tab === 'spaces' ? 'Canchas' : 'Usuarios'}
+                {tab === 'bookings' ? 'Reservas del día' : tab === 'fixed' ? 'Turnos fijos y bloqueos' : tab === 'spaces' ? 'Canchas' : 'Usuarios'}
               </h1>
             </div>
             {tab === 'bookings' && (
@@ -506,27 +991,28 @@ export default function StaffPanelPage() {
             )}
           </div>
 
-          {/* Tabs — solo admin */}
-          {isAdmin && (
-            <div className="flex gap-1 mt-6 bg-surface rounded-lg p-1 w-fit">
-              {([
-                { key: 'bookings', label: 'Reservas', icon: CalendarDays },
-                { key: 'spaces',   label: 'Canchas',  icon: ShieldCheck },
-                { key: 'users',    label: 'Usuarios', icon: User },
-              ] as { key: Tab; label: string; icon: any }[]).map(({ key, label, icon: Icon }) => (
-                <button
-                  key={key}
-                  onClick={() => setTab(key)}
-                  className={cn(
-                    'flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-semibold transition-all duration-normal',
-                    tab === key ? 'bg-white text-ink shadow-sm' : 'text-ink-2 hover:text-ink',
-                  )}
-                >
-                  <Icon size={14} /> {label}
-                </button>
-              ))}
-            </div>
-          )}
+          {/* Tabs — reservas + turnos fijos para todo el staff; canchas + usuarios solo admin */}
+          <div className="flex gap-1 mt-6 bg-surface rounded-lg p-1 w-fit">
+            {([
+              { key: 'bookings', label: 'Reservas',    icon: CalendarDays },
+              { key: 'fixed',    label: 'Turnos fijos', icon: Repeat },
+              ...(isAdmin ? [
+                { key: 'spaces', label: 'Canchas',  icon: ShieldCheck },
+                { key: 'users',  label: 'Usuarios', icon: User },
+              ] as { key: Tab; label: string; icon: any }[] : []),
+            ] as { key: Tab; label: string; icon: any }[]).map(({ key, label, icon: Icon }) => (
+              <button
+                key={key}
+                onClick={() => setTab(key)}
+                className={cn(
+                  'flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-semibold transition-all duration-normal',
+                  tab === key ? 'bg-white text-ink shadow-sm' : 'text-ink-2 hover:text-ink',
+                )}
+              >
+                <Icon size={14} /> {label}
+              </button>
+            ))}
+          </div>
 
           {/* Date nav — solo en tab reservas */}
           {tab === 'bookings' && <div className="flex items-center gap-3 mt-6">
@@ -572,6 +1058,7 @@ export default function StaffPanelPage() {
         {/* Admin tabs content */}
         {tab === 'spaces' && <SpacesPanel />}
         {tab === 'users'  && <UsersPanel />}
+        {tab === 'fixed'  && <FixedSlotsPanel defaultDate={date} />}
 
         {/* Bookings content */}
         {tab === 'bookings' && <>

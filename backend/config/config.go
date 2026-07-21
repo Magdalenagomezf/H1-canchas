@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strconv"
 
 	"github.com/joho/godotenv"
 )
@@ -14,6 +15,13 @@ type Config struct {
 	DSN           string
 	JWTSecret     string
 	AllowedOrigin string
+
+	MPAccessToken                     string
+	MPWebhookSecret                   string
+	MPWebhookURL                      string
+	BookingHoldTTLMinutes             int
+	DepositPercentage                 float64
+	BookingExpirySweepIntervalMinutes int
 }
 
 // Load lee el .env y arma la Config.
@@ -30,6 +38,25 @@ func Load() (*Config, error) {
 	if jwtSecret == "" {
 		return nil, fmt.Errorf("JWT_SECRET es requerido")
 	}
+
+	mpAccessToken := mustGetEnv("MP_ACCESS_TOKEN")
+	if mpAccessToken == "" {
+		return nil, fmt.Errorf("MP_ACCESS_TOKEN es requerido")
+	}
+
+	mpWebhookSecret := mustGetEnv("MP_WEBHOOK_SECRET")
+	if mpWebhookSecret == "" {
+		return nil, fmt.Errorf("MP_WEBHOOK_SECRET es requerido")
+	}
+
+	mpWebhookURL := mustGetEnv("MP_WEBHOOK_URL")
+	if mpWebhookURL == "" {
+		return nil, fmt.Errorf("MP_WEBHOOK_URL es requerido")
+	}
+
+	bookingHoldTTLMinutes := getEnvInt("BOOKING_HOLD_TTL_MINUTES", 20)
+	depositPercentage := getEnvFloat("DEPOSIT_PERCENTAGE", 0.15)
+	bookingExpirySweepIntervalMinutes := getEnvInt("BOOKING_EXPIRY_SWEEP_INTERVAL_MINUTES", 2)
 
 	// Railway provee DATABASE_URL completa; en local se arma desde variables separadas.
 	var dsn string
@@ -55,6 +82,13 @@ func Load() (*Config, error) {
 		DSN:           dsn,
 		JWTSecret:     jwtSecret,
 		AllowedOrigin: allowedOrigin,
+
+		MPAccessToken:                     mpAccessToken,
+		MPWebhookSecret:                   mpWebhookSecret,
+		MPWebhookURL:                      mpWebhookURL,
+		BookingHoldTTLMinutes:             bookingHoldTTLMinutes,
+		DepositPercentage:                 depositPercentage,
+		BookingExpirySweepIntervalMinutes: bookingExpirySweepIntervalMinutes,
 	}, nil
 }
 
@@ -64,6 +98,34 @@ func getEnv(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// getEnvInt devuelve el valor entero de la variable o el fallback si no
+// existe o no se puede parsear.
+func getEnvInt(key string, fallback int) int {
+	v := os.Getenv(key)
+	if v == "" {
+		return fallback
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		return fallback
+	}
+	return n
+}
+
+// getEnvFloat devuelve el valor float de la variable o el fallback si no
+// existe o no se puede parsear.
+func getEnvFloat(key string, fallback float64) float64 {
+	v := os.Getenv(key)
+	if v == "" {
+		return fallback
+	}
+	f, err := strconv.ParseFloat(v, 64)
+	if err != nil {
+		return fallback
+	}
+	return f
 }
 
 // mustGetEnv devuelve el valor o string vacío.

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -21,6 +22,7 @@ type BookingRepo interface {
 	UpdateStatus(ctx context.Context, id int64, status string) (bool, error)
 	GetAllWithDetails(ctx context.Context, userID *int64, date *time.Time) ([]domain.BookingDetail, error)
 	GetByIDWithDetails(ctx context.Context, id int64) (*domain.BookingDetail, error)
+	ExpirePendingBookings(ctx context.Context, spaceID, slotID int64, date time.Time) (int64, error)
 }
 
 // SpaceRepoForBooking es lo mínimo que el booking service
@@ -30,18 +32,29 @@ type SpaceRepoForBooking interface {
 }
 
 type BookingService struct {
-	repo      BookingRepo
-	spaceRepo SpaceRepoForBooking
+	repo       BookingRepo
+	spaceRepo  SpaceRepoForBooking
+	holdTTL    time.Duration
+	depositPct float64
 }
 
-func NewBookingService(repo BookingRepo, spaceRepo SpaceRepoForBooking) *BookingService {
-	return &BookingService{repo: repo, spaceRepo: spaceRepo}
+func NewBookingService(repo BookingRepo, spaceRepo SpaceRepoForBooking, holdTTL time.Duration, depositPct float64) *BookingService {
+	return &BookingService{repo: repo, spaceRepo: spaceRepo, holdTTL: holdTTL, depositPct: depositPct}
+}
+
+// depositAndBalance reparte el precio total en seña + saldo, redondeando
+// la seña a centavos primero para que la suma de ambos tramos nunca
+// difiera del total por errores de punto flotante.
+func (s *BookingService) depositAndBalance(totalPrice float64) (deposit, balance float64) {
+	deposit = math.Round(totalPrice*s.depositPct*100) / 100
+	balance = totalPrice - deposit
+	return deposit, balance
 }
 
 // Create crea una reserva para un usuario registrado.
 // HACER MAS ADELANTE= Usa transacción + FOR UPDATE para evitar doble reserva.
 func (s *BookingService) Create(ctx context.Context, customerUserID int64, spaceID, slotID int64, date time.Time) (*domain.Booking, error) {
-	if date.Before(time.Now().UTC().Truncate(24 * time.Hour)) {
+	if date.Before(argToday()) {
 		return nil, ErrInvalidBookingDate
 	}
 
@@ -69,6 +82,12 @@ func (s *BookingService) Create(ctx context.Context, customerUserID int64, space
 		return nil, ErrSlotDoesNotBelong
 	}
 
+	// Libera holds vencidos de este space+slot+fecha antes de chequear
+	// disponibilidad, para que una reserva expirada no bloquee una nueva.
+	if _, err := s.repo.ExpirePendingBookings(ctx, spaceID, slotID, date); err != nil {
+		return nil, fmt.Errorf("BookingService.Create: liberando holds vencidos: %w", err)
+	}
+
 	exists, err := s.repo.ExistsActiveBooking(ctx, spaceID, slotID, date)
 	if err != nil {
 		return nil, fmt.Errorf("BookingService.Create: validando disponibilidad: %w", err)
@@ -76,6 +95,9 @@ func (s *BookingService) Create(ctx context.Context, customerUserID int64, space
 	if exists {
 		return nil, ErrSlotNotAvailable
 	}
+
+	depositAmount, balanceAmount := s.depositAndBalance(space.PricePerSlot)
+	expiresAt := time.Now().UTC().Add(s.holdTTL)
 
 	booking := &domain.Booking{
 		CustomerUserID: &customerUserID,
@@ -85,6 +107,11 @@ func (s *BookingService) Create(ctx context.Context, customerUserID int64, space
 		BookingDate:    date,
 		Status:         domain.BookingStatusPending,
 		TotalPrice:     space.PricePerSlot,
+		DepositAmount:  depositAmount,
+		DepositStatus:  domain.PaymentStatusUnpaid,
+		ExpiresAt:      &expiresAt,
+		BalanceAmount:  balanceAmount,
+		BalanceStatus:  domain.PaymentStatusUnpaid,
 	}
 
 	id, err := s.repo.Create(ctx, tx, booking)
@@ -113,7 +140,7 @@ func (s *BookingService) CreateManual(ctx context.Context, createdBy int64, spac
 		return nil, ErrPhoneRequired
 	}
 
-	if date.Before(time.Now().UTC().Truncate(24 * time.Hour)) {
+	if date.Before(argToday()) {
 		return nil, ErrInvalidBookingDate
 	}
 
@@ -147,6 +174,8 @@ func (s *BookingService) CreateManual(ctx context.Context, createdBy int64, spac
 		return nil, ErrSlotNotAvailable
 	}
 
+	depositAmount, balanceAmount := s.depositAndBalance(space.PricePerSlot)
+
 	booking := &domain.Booking{
 		CreatedBy:     createdBy,
 		CustomerName:  &customerName,
@@ -156,6 +185,10 @@ func (s *BookingService) CreateManual(ctx context.Context, createdBy int64, spac
 		BookingDate:   date,
 		Status:        domain.BookingStatusConfirmed, // manual va directo a confirmed
 		TotalPrice:    space.PricePerSlot,
+		DepositAmount: depositAmount,
+		DepositStatus: domain.PaymentStatusUnpaid,
+		BalanceAmount: balanceAmount,
+		BalanceStatus: domain.PaymentStatusUnpaid,
 	}
 
 	id, err := s.repo.Create(ctx, tx, booking)
@@ -205,6 +238,10 @@ func (s *BookingService) Cancel(ctx context.Context, bookingID, requesterID int6
 	isStaff := requesterRole == domain.RoleReceptionist || requesterRole == domain.RoleAdmin
 	if !isOwner && !isStaff {
 		return ErrUnauthorized
+	}
+
+	if booking.DepositStatus == domain.PaymentStatusPaid && !isStaff {
+		return ErrCancelRequiresStaffAfterPayment
 	}
 
 	if booking.Status == domain.BookingStatusCancelled {

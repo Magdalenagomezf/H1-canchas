@@ -17,6 +17,7 @@ import (
 )
 
 var slotCounter int64
+var userCounter int64
 
 var testDB *sqlx.DB
 
@@ -63,6 +64,8 @@ func applyMigrations(db *sqlx.DB) error {
 		"002_create_spaces.sql",
 		"003_create_space_slots.sql",
 		"004_create_bookings.sql",
+		"005_add_payments.sql",
+		"006_add_booking_batches.sql",
 	}
 
 	for _, f := range files {
@@ -80,7 +83,7 @@ func applyMigrations(db *sqlx.DB) error {
 // truncateAll wipes all tables before each test.
 func truncateAll(t *testing.T) {
 	t.Helper()
-	_, err := testDB.Exec("TRUNCATE users, spaces, space_slots, bookings CASCADE")
+	_, err := testDB.Exec("TRUNCATE users, spaces, space_slots, bookings, payments, booking_batches CASCADE")
 	if err != nil {
 		t.Fatalf("truncateAll: %v", err)
 	}
@@ -90,10 +93,12 @@ func truncateAll(t *testing.T) {
 
 func seedUser(t *testing.T) int64 {
 	t.Helper()
+	n := atomic.AddInt64(&userCounter, 1)
+	phone := fmt.Sprintf("112233%04d", n)
 	var id int64
 	err := testDB.QueryRowContext(context.Background(),
 		`INSERT INTO users (name, phone, password_hash, role) VALUES ($1, $2, $3, $4) RETURNING id`,
-		"Test User", "1122334455", "hash", domain.RoleCustomer,
+		"Test User", phone, "hash", domain.RoleCustomer,
 	).Scan(&id)
 	if err != nil {
 		t.Fatalf("seedUser: %v", err)

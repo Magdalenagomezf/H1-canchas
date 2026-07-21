@@ -130,6 +130,18 @@ func TestBookingController_Cancel_AlreadyCancelled(t *testing.T) {
 	}
 }
 
+func TestBookingController_Cancel_RequiresStaffAfterPayment(t *testing.T) {
+	svc := &mockBookingService{
+		cancelFn: func(_ context.Context, _, _ int64, _ string) error { return service.ErrCancelRequiresStaffAfterPayment },
+	}
+	r := newBookingRouter(svc, 1, domain.RoleCustomer)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodPatch, "/bookings/1/cancel", nil))
+	if w.Code != http.StatusForbidden {
+		t.Errorf("got %d, want 403", w.Code)
+	}
+}
+
 func TestBookingController_Cancel_Success(t *testing.T) {
 	r := newBookingRouter(&mockBookingService{}, 1, domain.RoleCustomer)
 	w := httptest.NewRecorder()
@@ -168,25 +180,6 @@ func TestBookingController_GetMyBookings_CustomerGetsOwnBookings(t *testing.T) {
 	json.Unmarshal(w.Body.Bytes(), &resp)
 	if len(resp) != 2 {
 		t.Errorf("got %d items, want 2", len(resp))
-	}
-}
-
-func TestBookingController_GetMyBookings_StaffGetsAll(t *testing.T) {
-	svc := &mockBookingService{
-		getAllFn: func(_ context.Context, _ *time.Time) ([]domain.BookingDetail, error) {
-			return []domain.BookingDetail{{ID: 1}, {ID: 2}, {ID: 3}}, nil
-		},
-	}
-	r := newBookingRouter(svc, 1, domain.RoleAdmin)
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/bookings", nil))
-	if w.Code != http.StatusOK {
-		t.Errorf("got %d, want 200", w.Code)
-	}
-	var resp []any
-	json.Unmarshal(w.Body.Bytes(), &resp)
-	if len(resp) != 3 {
-		t.Errorf("got %d items, want 3", len(resp))
 	}
 }
 

@@ -246,6 +246,9 @@ func (h *BookingController) handleBookingError(c *gin.Context, err error) {
 	case errors.Is(err, service.ErrBookingAlreadyCompleted):
 		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 
+	case errors.Is(err, service.ErrCancelRequiresStaffAfterPayment):
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+
 	default:
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "error interno"})
 	}

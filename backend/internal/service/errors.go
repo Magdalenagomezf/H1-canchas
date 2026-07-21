@@ -39,4 +39,22 @@ var (
 	ErrUserHasBookings  = errors.New("el usuario tiene reservas asociadas y no puede eliminarse")
 	ErrSpaceHasBookings = errors.New("el espacio tiene reservas asociadas y no puede eliminarse")
 	ErrCannotDeleteSelf = errors.New("no podés eliminar tu propia cuenta")
+
+	// pagos
+	ErrBookingExpired                  = errors.New("la reserva expiró y el slot ya no está disponible")
+	ErrBookingNotPayable               = errors.New("la reserva no admite pagos en su estado actual")
+	ErrPaymentAlreadyCompleted         = errors.New("ese tramo de la reserva ya está pagado")
+	ErrInvalidPaymentKind              = errors.New("tramo de pago inválido")
+	ErrInvalidPaymentMethod            = errors.New("método de pago inválido")
+	ErrInvalidPaymentStatus            = errors.New("estado de pago inválido")
+	ErrCancelRequiresStaffAfterPayment = errors.New("una vez pagada la seña, solo el staff puede cancelar la reserva")
+	ErrMercadoPagoUnavailable          = errors.New("mercado pago no está disponible en este momento")
+
+	// turnos fijos y bloqueos de mantenimiento
+	ErrInvalidWeekday        = errors.New("día de la semana inválido")
+	ErrInvalidDateRange      = errors.New("el rango de fechas es inválido")
+	ErrDateRangeTooLong      = errors.New("el rango de fechas no puede superar 1 año")
+	ErrReasonRequired        = errors.New("el motivo es obligatorio")
+	ErrBatchNotFound         = errors.New("turno fijo o bloqueo no encontrado")
+	ErrBatchAlreadyCancelled = errors.New("el turno fijo o bloqueo ya está cancelado")
 )

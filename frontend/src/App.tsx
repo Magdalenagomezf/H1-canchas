@@ -7,6 +7,7 @@ import SpacesPage from './pages/SpacesPage';
 import SpaceDetailPage from './pages/SpaceDetailPage';
 import MyBookingsPage from './pages/MyBookingsPage';
 import StaffPanelPage from './pages/StaffPanelPage';
+import PaymentResultPage from './pages/PaymentResultPage';
 
 function PrivateRoute() {
   const { isAuthenticated } = useAuth();
@@ -45,6 +46,7 @@ export default function App() {
 
         <Route element={<PrivateRoute />}>
           <Route path="/mis-reservas" element={<MyBookingsPage />} />
+          <Route path="/pago/resultado/:bookingId" element={<PaymentResultPage />} />
         </Route>
 
         <Route element={<StaffRoute />}>

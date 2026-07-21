@@ -32,9 +32,26 @@ type BookingDetailResponse struct {
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 
+	DepositAmount float64    `json:"deposit_amount"`
+	DepositStatus string     `json:"deposit_status"`
+	DepositMethod *string    `json:"deposit_method,omitempty"`
+	ExpiresAt     *time.Time `json:"expires_at,omitempty"`
+	BalanceAmount float64    `json:"balance_amount"`
+	BalanceStatus string     `json:"balance_status"`
+	BalanceMethod *string    `json:"balance_method,omitempty"`
+
 	Space    SpaceInfo    `json:"space"`
 	Slot     SlotInfo     `json:"slot"`
 	Customer CustomerInfo `json:"customer"`
+	Batch    *BatchInfo   `json:"batch,omitempty"`
+}
+
+// BatchInfo identifica que una reserva pertenece a un turno fijo (profesor)
+// o a un bloqueo de mantenimiento, en vez de ser una reserva puntual.
+type BatchInfo struct {
+	ID     int64  `json:"id"`
+	Type   string `json:"type"`
+	Reason string `json:"reason"`
 }
 
 type SpaceInfo struct {
@@ -81,13 +98,31 @@ func FromBookingDetail(b domain.BookingDetail) BookingDetailResponse {
 		}
 	}
 
+	var batch *BatchInfo
+	if b.BatchID != nil {
+		batch = &BatchInfo{ID: *b.BatchID}
+		if b.BatchType != nil {
+			batch.Type = *b.BatchType
+		}
+		if b.BatchReason != nil {
+			batch.Reason = *b.BatchReason
+		}
+	}
+
 	return BookingDetailResponse{
-		ID:          b.ID,
-		BookingDate: b.BookingDate.Format("2006-01-02"),
-		Status:      b.Status,
-		TotalPrice:  b.TotalPrice,
-		CreatedAt:   b.CreatedAt,
-		UpdatedAt:   b.UpdatedAt,
+		ID:            b.ID,
+		BookingDate:   b.BookingDate.Format("2006-01-02"),
+		Status:        b.Status,
+		TotalPrice:    b.TotalPrice,
+		CreatedAt:     b.CreatedAt,
+		UpdatedAt:     b.UpdatedAt,
+		DepositAmount: b.DepositAmount,
+		DepositStatus: b.DepositStatus,
+		DepositMethod: b.DepositMethod,
+		ExpiresAt:     b.ExpiresAt,
+		BalanceAmount: b.BalanceAmount,
+		BalanceStatus: b.BalanceStatus,
+		BalanceMethod: b.BalanceMethod,
 		Space: SpaceInfo{
 			ID:   b.SpaceID,
 			Name: b.SpaceName,
@@ -100,5 +135,6 @@ func FromBookingDetail(b domain.BookingDetail) BookingDetailResponse {
 			EndTime:   b.SlotEndTime,
 		},
 		Customer: customer,
+		Batch:    batch,
 	}
 }

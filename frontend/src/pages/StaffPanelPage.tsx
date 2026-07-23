@@ -13,6 +13,7 @@ import { getSpaces, getSlots, createSpace, updateSpace, deleteSpace } from '../a
 import { getUsers, createStaffUser, updateUserRole, deleteUser } from '../api/users';
 import type { BookingDetail, BookingStatus, BookingBatch } from '../types';
 import { SPACE_LABELS, SPACE_ICONS } from '../components/SpaceCard';
+import { ModalPortal } from '../components/ModalPortal';
 import { useAuth } from '../hooks/useAuth';
 import { cn } from '@/lib/utils';
 
@@ -168,7 +169,7 @@ function ManualBookingDialog({
     'w-full px-3.5 py-2.5 bg-surface border-[1.5px] border-black/10 rounded-lg text-sm font-medium text-ink placeholder:text-ink-2/60 outline-none transition-all duration-normal focus:border-primary focus:ring-2 focus:ring-primary/[0.13]';
 
   return (
-    <>
+    <ModalPortal>
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -290,7 +291,7 @@ function ManualBookingDialog({
           </div>
         </form>
       </motion.div>
-    </>
+    </ModalPortal>
   );
 }
 
@@ -343,7 +344,7 @@ function RecurringBookingDialog({ defaultDate, onClose }: { defaultDate: string;
     'w-full px-3.5 py-2.5 bg-surface border-[1.5px] border-black/10 rounded-lg text-sm font-medium text-ink placeholder:text-ink-2/60 outline-none transition-all duration-normal focus:border-primary focus:ring-2 focus:ring-primary/[0.13]';
 
   return (
-    <>
+    <ModalPortal>
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
         className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={onClose} />
       <motion.div initial={{ opacity: 0, scale: 0.94, y: 16 }} animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -456,7 +457,7 @@ function RecurringBookingDialog({ defaultDate, onClose }: { defaultDate: string;
           </>
         )}
       </motion.div>
-    </>
+    </ModalPortal>
   );
 }
 
@@ -497,7 +498,7 @@ function MaintenanceBlockDialog({ defaultDate, onClose }: { defaultDate: string;
     'w-full px-3.5 py-2.5 bg-surface border-[1.5px] border-black/10 rounded-lg text-sm font-medium text-ink placeholder:text-ink-2/60 outline-none transition-all duration-normal focus:border-primary focus:ring-2 focus:ring-primary/[0.13]';
 
   return (
-    <>
+    <ModalPortal>
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
         className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={onClose} />
       <motion.div initial={{ opacity: 0, scale: 0.94, y: 16 }} animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -604,7 +605,7 @@ function MaintenanceBlockDialog({ defaultDate, onClose }: { defaultDate: string;
           </>
         )}
       </motion.div>
-    </>
+    </ModalPortal>
   );
 }
 

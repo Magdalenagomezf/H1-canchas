@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { getMyBookings, cancelBooking } from '../api/bookings';
 import type { BookingDetail, BookingStatus } from '../types';
 import { SPACE_LABELS } from '../components/SpaceCard';
+import { ModalPortal } from '../components/ModalPortal';
 import { cn } from '@/lib/utils';
 
 const STATUS_CONFIG: Record<BookingStatus, { label: string; classes: string }> = {
@@ -191,7 +192,7 @@ export default function MyBookingsPage() {
       {/* Cancel dialog */}
       <AnimatePresence>
         {cancelTarget && (
-          <>
+          <ModalPortal>
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -231,7 +232,7 @@ export default function MyBookingsPage() {
                 </button>
               </div>
             </motion.div>
-          </>
+          </ModalPortal>
         )}
       </AnimatePresence>
     </div>

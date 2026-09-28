@@ -47,11 +47,6 @@ type PaymentService struct {
 }
 
 func NewPaymentService(repo PaymentRepo, bookingRepo BookingRepoForPayment, mp MercadoPagoClient, webhookSecret, backURLBase, webhookURL string) *PaymentService {
-	if n := len(webhookSecret); n >= 8 {
-		log.Printf("DEBUG webhook secret: len=%d start=%q end=%q", n, webhookSecret[:4], webhookSecret[n-4:])
-	} else {
-		log.Printf("DEBUG webhook secret: len=%d (demasiado corto, algo está mal)", n)
-	}
 	return &PaymentService{
 		repo:          repo,
 		bookingRepo:   bookingRepo,

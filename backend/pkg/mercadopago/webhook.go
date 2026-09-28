@@ -4,14 +4,12 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
-	"log"
 	"strings"
 )
 
 func VerifyWebhookSignature(secret, xSignature, xRequestID, dataID string) bool {
 	ts, v1, ok := parseXSignature(xSignature)
 	if !ok {
-		log.Printf("DEBUG webhook: no se pudo parsear x-signature=%q", xSignature)
 		return false
 	}
 
@@ -22,8 +20,6 @@ func VerifyWebhookSignature(secret, xSignature, xRequestID, dataID string) bool 
 	mac := hmac.New(sha256.New, []byte(secret))
 	mac.Write([]byte(manifest))
 	expected := hex.EncodeToString(mac.Sum(nil))
-
-	log.Printf("DEBUG webhook: manifest=%q expected=%s received=%s", manifest, expected, v1)
 
 	// hmac.Equal (constant-time) because v1 is attacker-controlled input; a
 	// plain == comparison would leak timing information about the secret.

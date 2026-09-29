@@ -1,19 +1,109 @@
-import { useState } from 'react';
-import { useNavigate, useLocation, type Location } from 'react-router-dom';
+import { useState, type ReactNode } from 'react';
+import { Link, useNavigate, useLocation, type Location } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
-import { Eye, EyeOff, Phone, Lock, User } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { ArrowRight, Eye, EyeOff } from 'lucide-react';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { login, register } from '../api/auth';
 import { useAuth } from '../hooks/useAuth';
+import { buttonVariants } from '@/components/ui/button';
+import { LandingNav } from '@/components/landing/LandingNav';
+import { LightLine } from '@/components/landing/LightLine';
+import { SectionLabel } from '@/components/landing/SectionLabel';
+import { CONTAINER, EASE, GRID, MONO } from '@/components/landing/ui';
 import { cn } from '@/lib/utils';
 
 const inputClass =
-  'w-full py-3 bg-surface border-[1.5px] border-black/10 rounded-lg text-sm font-medium text-ink placeholder:text-ink-2/60 outline-none transition-all duration-normal focus:border-primary focus:ring-2 focus:ring-primary/[0.13]';
+  'w-full border-0 border-b border-paper/25 bg-transparent py-3 text-lg text-paper placeholder:text-paper/30 outline-none transition-colors duration-300 focus:border-paper focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-paper';
+
+const TITLES = [
+  { lines: ['BIENVENIDO'], text: 'Ingresá para gestionar tus reservas' },
+  { lines: ['CREÁ TU', 'CUENTA'], text: 'Es gratis y lleva menos de un minuto' },
+] as const;
+
+function Field({ id, label, children }: { id: string; label: string; children: ReactNode }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <label htmlFor={id} className={cn(MONO, 'text-concrete')}>
+        {label}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+function PasswordInput({
+  id,
+  value,
+  onChange,
+  show,
+  onToggle,
+}: {
+  id: string;
+  value: string;
+  onChange: (v: string) => void;
+  show: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <div className="relative">
+      <input
+        id={id}
+        type={show ? 'text' : 'password'}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        required
+        className={cn(inputClass, 'pr-11')}
+      />
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-label={show ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+        className="absolute right-0 top-1/2 flex size-10 -translate-y-1/2 items-center justify-center text-concrete transition-colors hover:text-paper"
+      >
+        {show ? <EyeOff size={18} /> : <Eye size={18} />}
+      </button>
+    </div>
+  );
+}
+
+function FormFooter({
+  error,
+  isPending,
+  idle,
+  pending,
+}: {
+  error?: string;
+  isPending: boolean;
+  idle: string;
+  pending: string;
+}) {
+  return (
+    <>
+      {error && (
+        <p role="alert" className={cn(MONO, 'normal-case tracking-normal text-red-300')}>
+          {error}
+        </p>
+      )}
+      <button
+        type="submit"
+        disabled={isPending}
+        className={cn(
+          buttonVariants({ variant: 'court' }),
+          'mt-2 h-14 w-full justify-center gap-3 text-base font-semibold disabled:cursor-not-allowed disabled:opacity-60',
+        )}
+      >
+        {isPending ? pending : idle}
+        <ArrowRight size={18} className="transition-transform duration-300 group-hover:translate-x-1" />
+      </button>
+    </>
+  );
+}
 
 export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { setAuth } = useAuth();
+  const reduce = useReducedMotion();
 
   const state = location.state as { from?: Location; tab?: string; pendingBooking?: { date: string; slotId: number } } | null;
   const redirectTo = state?.from
@@ -57,166 +147,179 @@ export default function LoginPage() {
   const error = tab === 0 ? loginMutation.error?.message : registerMutation.error?.message;
   const isPending = tab === 0 ? loginMutation.isPending : registerMutation.isPending;
 
+  const title = TITLES[tab];
+  const y = reduce ? 0 : 12;
+  const swap = { duration: 0.25, ease: EASE };
+
   return (
-    <div className="animate-fade-up min-h-[calc(100vh-58px)] bg-bg flex items-center justify-center px-4 py-16">
-      <div className="w-full max-w-md">
+    <div className="landing">
+      <div className="on-dark min-h-[100svh] bg-night text-paper">
+        <LandingNav solid hideAccountLink />
 
-        {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="font-serif text-4xl text-ink tracking-tight mb-1.5">
-            {tab === 0 ? 'Bienvenido' : 'Crear cuenta'}
-          </h1>
-          <p className="text-sm text-ink-2">
-            {tab === 0
-              ? 'Ingresá para gestionar tus reservas'
-              : 'Es gratis y lleva menos de un minuto'}
-          </p>
-        </div>
+        <main className="relative pt-16 md:pt-20">
+          {/* Slab LED with its soft warm wash, same as the hero */}
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-x-0 top-16 h-[160px] bg-gradient-to-b from-light/10 to-transparent md:top-20 md:h-[200px]"
+          />
+          <LightLine className="absolute inset-x-0 top-16 md:top-20" delay={0.3} />
 
-        {/* Card */}
-        <div className="bg-white rounded-xl border-[1.5px] border-black/[0.07] shadow-md p-6">
+          <div className={cn(CONTAINER, GRID, 'relative py-14 md:py-20 lg:min-h-[calc(100svh-5rem)] lg:items-center lg:py-24')}>
+            <div className="col-span-12 lg:col-span-6">
+              <SectionLabel number="H1" label="Acceso" />
 
-          {/* Tab switcher */}
-          <div className="flex bg-surface rounded-lg p-1 mb-6">
-            {(['Iniciar sesión', 'Registrarme'] as const).map((label, i) => (
-              <button
-                key={label}
-                onClick={() => handleTabChange(i as 0 | 1)}
-                className={cn(
-                  'flex-1 py-2 text-sm font-semibold rounded-md transition-all duration-normal',
-                  tab === i
-                    ? 'bg-white text-ink shadow-sm'
-                    : 'text-ink-2 hover:text-ink',
-                )}
+              <h1
+                key={tab}
+                className="mt-10 font-arch font-expanded text-[clamp(2.25rem,min(8vw,12vh),6.5rem)] font-extrabold uppercase leading-[0.9] tracking-[-0.02em] text-paper md:mt-14"
               >
-                {label}
-              </button>
-            ))}
+                {title.lines.map((line, i) => (
+                  <motion.span
+                    key={line}
+                    className="block"
+                    initial={{ opacity: 0, y: reduce ? 0 : 28 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.7, ease: EASE, delay: 0.15 + i * 0.08 }}
+                  >
+                    {line}
+                  </motion.span>
+                ))}
+              </h1>
+              <motion.p
+                key={`sub-${tab}`}
+                className="mt-6 max-w-md text-base leading-relaxed text-paper/85 md:text-lg"
+                initial={{ opacity: 0, y }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, ease: EASE, delay: 0.35 }}
+              >
+                {title.text}
+              </motion.p>
+            </div>
+
+            <motion.div
+              className="col-span-12 mt-14 lg:col-span-5 lg:col-start-8 lg:mt-0"
+              initial={{ opacity: 0, y }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.7, ease: EASE, delay: 0.3 }}
+            >
+              <div role="tablist" aria-label="Acceso" className="mb-10 flex gap-8">
+                {(['Iniciar sesión', 'Registrarme'] as const).map((label, i) => (
+                  <button
+                    key={label}
+                    type="button"
+                    role="tab"
+                    id={`auth-tab-${i}`}
+                    aria-selected={tab === i}
+                    aria-controls="auth-panel"
+                    onClick={() => handleTabChange(i as 0 | 1)}
+                    className={cn(
+                      MONO,
+                      'relative pb-3 transition-colors duration-300',
+                      tab === i ? 'text-paper' : 'text-concrete hover:text-paper',
+                    )}
+                  >
+                    {label}
+                    {tab === i && (
+                      <motion.span
+                        layoutId="auth-tab-led"
+                        aria-hidden="true"
+                        className="absolute inset-x-0 bottom-0 h-[2px] bg-light"
+                        transition={{ duration: reduce ? 0 : 0.35, ease: EASE }}
+                      />
+                    )}
+                  </button>
+                ))}
+              </div>
+
+              <div id="auth-panel" role="tabpanel" aria-labelledby={`auth-tab-${tab}`}>
+                <AnimatePresence mode="wait">
+                  {tab === 0 ? (
+                    <motion.form
+                      key="login"
+                      initial={{ opacity: 0, y }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -y }}
+                      transition={swap}
+                      onSubmit={(e) => { e.preventDefault(); loginMutation.mutate(); }}
+                      className="flex flex-col gap-8"
+                    >
+                      <Field id="login-phone" label="Teléfono">
+                        <input
+                          id="login-phone"
+                          type="tel"
+                          autoComplete="tel"
+                          value={loginPhone}
+                          onChange={(e) => setLoginPhone(e.target.value)}
+                          required
+                          className={inputClass}
+                        />
+                      </Field>
+                      <Field id="login-password" label="Contraseña">
+                        <PasswordInput
+                          id="login-password"
+                          value={loginPassword}
+                          onChange={setLoginPassword}
+                          show={showLoginPass}
+                          onToggle={() => setShowLoginPass((v) => !v)}
+                        />
+                      </Field>
+                      <FormFooter error={error} isPending={isPending} idle="Ingresar" pending="Ingresando..." />
+                    </motion.form>
+                  ) : (
+                    <motion.form
+                      key="register"
+                      initial={{ opacity: 0, y }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -y }}
+                      transition={swap}
+                      onSubmit={(e) => { e.preventDefault(); registerMutation.mutate(); }}
+                      className="flex flex-col gap-8"
+                    >
+                      <Field id="reg-name" label="Nombre completo">
+                        <input
+                          id="reg-name"
+                          type="text"
+                          autoComplete="name"
+                          value={regName}
+                          onChange={(e) => setRegName(e.target.value)}
+                          required
+                          className={inputClass}
+                        />
+                      </Field>
+                      <Field id="reg-phone" label="Teléfono">
+                        <input
+                          id="reg-phone"
+                          type="tel"
+                          autoComplete="tel"
+                          value={regPhone}
+                          onChange={(e) => setRegPhone(e.target.value)}
+                          required
+                          className={inputClass}
+                        />
+                      </Field>
+                      <Field id="reg-password" label="Contraseña">
+                        <PasswordInput
+                          id="reg-password"
+                          value={regPassword}
+                          onChange={setRegPassword}
+                          show={showRegPass}
+                          onToggle={() => setShowRegPass((v) => !v)}
+                        />
+                      </Field>
+                      <FormFooter error={error} isPending={isPending} idle="Crear cuenta" pending="Creando cuenta..." />
+                    </motion.form>
+                  )}
+                </AnimatePresence>
+              </div>
+
+              <Link
+                to="/"
+                className={cn(MONO, 'mt-10 inline-block text-concrete transition-colors hover:text-paper')}
+              >
+                ← Volver al inicio
+              </Link>
+            </motion.div>
           </div>
-
-          <AnimatePresence mode="wait">
-            {tab === 0 ? (
-              <motion.form
-                key="login"
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 10 }}
-                transition={{ duration: 0.18 }}
-                onSubmit={(e) => { e.preventDefault(); loginMutation.mutate(); }}
-                className="flex flex-col gap-4"
-              >
-                {/* Phone */}
-                <div className="relative">
-                  <Phone size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-2/50 pointer-events-none" />
-                  <input
-                    type="tel"
-                    placeholder="Teléfono"
-                    value={loginPhone}
-                    onChange={(e) => setLoginPhone(e.target.value)}
-                    required
-                    className={cn(inputClass, 'pl-10 pr-4')}
-                  />
-                </div>
-
-                {/* Password */}
-                <div className="relative">
-                  <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-2/50 pointer-events-none" />
-                  <input
-                    type={showLoginPass ? 'text' : 'password'}
-                    placeholder="Contraseña"
-                    value={loginPassword}
-                    onChange={(e) => setLoginPassword(e.target.value)}
-                    required
-                    className={cn(inputClass, 'pl-10 pr-11')}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowLoginPass((v) => !v)}
-                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-ink-2/50 hover:text-ink-2 transition-colors"
-                  >
-                    {showLoginPass ? <EyeOff size={15} /> : <Eye size={15} />}
-                  </button>
-                </div>
-
-                {error && <p className="text-xs text-status-cancelled font-medium">{error}</p>}
-
-                <button
-                  type="submit"
-                  disabled={isPending}
-                  className="bg-primary text-white font-bold rounded-lg px-6 py-3 text-sm transition-all duration-normal ease-smooth hover:bg-primary-dark hover:shadow-glow active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed mt-1"
-                >
-                  {isPending ? 'Ingresando...' : 'Ingresar'}
-                </button>
-              </motion.form>
-            ) : (
-              <motion.form
-                key="register"
-                initial={{ opacity: 0, x: 10 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -10 }}
-                transition={{ duration: 0.18 }}
-                onSubmit={(e) => { e.preventDefault(); registerMutation.mutate(); }}
-                className="flex flex-col gap-4"
-              >
-                {/* Name */}
-                <div className="relative">
-                  <User size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-2/50 pointer-events-none" />
-                  <input
-                    type="text"
-                    placeholder="Nombre completo"
-                    value={regName}
-                    onChange={(e) => setRegName(e.target.value)}
-                    required
-                    className={cn(inputClass, 'pl-10 pr-4')}
-                  />
-                </div>
-
-                {/* Phone */}
-                <div className="relative">
-                  <Phone size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-2/50 pointer-events-none" />
-                  <input
-                    type="tel"
-                    placeholder="Teléfono"
-                    value={regPhone}
-                    onChange={(e) => setRegPhone(e.target.value)}
-                    required
-                    className={cn(inputClass, 'pl-10 pr-4')}
-                  />
-                </div>
-
-                {/* Password */}
-                <div className="relative">
-                  <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-2/50 pointer-events-none" />
-                  <input
-                    type={showRegPass ? 'text' : 'password'}
-                    placeholder="Contraseña"
-                    value={regPassword}
-                    onChange={(e) => setRegPassword(e.target.value)}
-                    required
-                    className={cn(inputClass, 'pl-10 pr-11')}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowRegPass((v) => !v)}
-                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-ink-2/50 hover:text-ink-2 transition-colors"
-                  >
-                    {showRegPass ? <EyeOff size={15} /> : <Eye size={15} />}
-                  </button>
-                </div>
-
-                {error && <p className="text-xs text-status-cancelled font-medium">{error}</p>}
-
-                <button
-                  type="submit"
-                  disabled={isPending}
-                  className="bg-primary text-white font-bold rounded-lg px-6 py-3 text-sm transition-all duration-normal ease-smooth hover:bg-primary-dark hover:shadow-glow active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed mt-1"
-                >
-                  {isPending ? 'Creando cuenta...' : 'Crear cuenta'}
-                </button>
-              </motion.form>
-            )}
-          </AnimatePresence>
-        </div>
+        </main>
       </div>
     </div>
   );

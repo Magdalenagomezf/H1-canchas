@@ -31,10 +31,14 @@ function StaffRoute() {
   return <Outlet />;
 }
 
+// Routes that render their own landing-styled nav instead of the legacy Navbar.
+const LANDING_PATHS = ['/', '/login'];
+
 export default function App() {
+  const { pathname } = useLocation();
   return (
     <div className="min-h-screen bg-bg">
-      <Navbar />
+      {!LANDING_PATHS.includes(pathname) && <Navbar />}
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/canchas" element={<SpacesPage />} />

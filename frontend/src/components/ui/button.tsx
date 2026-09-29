@@ -18,6 +18,12 @@ const buttonVariants = cva(
         destructive:
           "bg-destructive/10 text-destructive hover:bg-destructive/20 focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:hover:bg-destructive/30 dark:focus-visible:ring-destructive/40",
         link: "text-primary underline-offset-4 hover:underline",
+        // Landing-only: solid dusk blue, square, white text
+        court:
+          "group rounded-none bg-dusk text-white hover:brightness-125 focus-visible:ring-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-court",
+        // Landing-only: text link whose underline grows from the left on hover
+        line:
+          "group relative rounded-none bg-transparent px-0 bg-linear-to-r from-current to-current bg-[length:0%_1px] bg-left-bottom bg-no-repeat hover:bg-[length:100%_1px] focus-visible:ring-0 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-court",
       },
       size: {
         default:

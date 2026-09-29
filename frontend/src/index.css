@@ -27,3 +27,53 @@ body {
   outline-offset: 2px;
   border-radius: 6px;
 }
+
+/* ───────────────────────── Landing ("/") ─────────────────────────
+   New token names only; nothing above is modified. */
+@theme {
+  --color-night: #0B0D12;
+  --color-graphite: #1A1D23;
+  --color-concrete: #8A8A85;
+  --color-paper: #F4F3F0;
+  --color-court: #1E3FAE;
+  --color-dusk: #2B3F6B;
+  --color-light: #F2C27B;
+  --font-arch: 'Archivo Variable', 'Outfit', sans-serif;
+  --font-jb: 'JetBrains Mono', ui-monospace, monospace;
+  --ease-arch: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.landing {
+  --radius: 0px;
+  font-family: var(--font-arch);
+  background-color: var(--color-night);
+  color: var(--color-paper);
+  overflow-x: clip;
+}
+
+.landing *,
+.landing *::before,
+.landing *::after {
+  border-radius: 0;
+}
+
+.landing :focus-visible {
+  outline: 2px solid var(--color-court);
+  outline-offset: 3px;
+  border-radius: 0;
+}
+
+/* On dark surfaces the court blue is low contrast, use paper for focus */
+.landing .on-dark :focus-visible {
+  outline-color: var(--color-paper);
+}
+
+.landing ::selection {
+  background: var(--color-court);
+  color: #fff;
+}
+
+.font-expanded {
+  font-stretch: 118%;
+  font-variation-settings: 'wdth' 118;
+}

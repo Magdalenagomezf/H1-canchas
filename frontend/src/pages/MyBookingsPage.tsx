@@ -1,19 +1,25 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { CalendarDays, Clock, MapPin, XCircle, LayoutGrid } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { getMyBookings, cancelBooking } from '../api/bookings';
 import type { BookingDetail, BookingStatus } from '../types';
 import { SPACE_LABELS } from '../components/SpaceCard';
 import { ModalPortal } from '../components/ModalPortal';
 import { cn } from '@/lib/utils';
+import { buttonVariants } from '@/components/ui/button';
+import { LandingFooter } from '@/components/landing/LandingFooter';
+import { LandingNav } from '@/components/landing/LandingNav';
+import { LightLine } from '@/components/landing/LightLine';
+import { SectionLabel } from '@/components/landing/SectionLabel';
+import { formatPrice } from '@/components/landing/spaceHelpers';
+import { CONTAINER, EASE, MONO } from '@/components/landing/ui';
 
-const STATUS_CONFIG: Record<BookingStatus, { label: string; classes: string }> = {
-  pending:   { label: 'Pendiente',  classes: 'bg-status-pending/10 text-status-pending' },
-  confirmed: { label: 'Confirmada', classes: 'bg-status-confirmed/10 text-status-confirmed' },
-  cancelled: { label: 'Cancelada',  classes: 'bg-status-cancelled/10 text-status-cancelled' },
-  completed: { label: 'Completada', classes: 'bg-status-completed/10 text-status-completed' },
+const STATUS_CONFIG: Record<BookingStatus, { label: string; dot: string; text: string }> = {
+  pending:   { label: 'Pendiente',  dot: 'bg-light',    text: 'text-light' },
+  confirmed: { label: 'Confirmada', dot: 'bg-paper',    text: 'text-paper' },
+  cancelled: { label: 'Cancelada',  dot: 'bg-concrete', text: 'text-concrete' },
+  completed: { label: 'Completada', dot: 'bg-concrete', text: 'text-concrete' },
 };
 
 function formatDate(iso: string) {
@@ -22,80 +28,76 @@ function formatDate(iso: string) {
   });
 }
 
-function BookingCard({
+function BookingRow({
   booking,
   onCancel,
+  muted = false,
 }: {
   booking: BookingDetail;
   onCancel: (b: BookingDetail) => void;
+  muted?: boolean;
 }) {
   const navigate = useNavigate();
+  const reduce = useReducedMotion();
   const status = STATUS_CONFIG[booking.status];
   const canCancel = booking.status === 'pending' || booking.status === 'confirmed';
 
   return (
-    <motion.div
+    <motion.li
       layout
-      initial={{ opacity: 0, y: 16 }}
+      initial={{ opacity: 0, y: reduce ? 0 : 12 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.97 }}
-      transition={{ duration: 0.3 }}
-      className="bg-white rounded-xl border-[1.5px] border-black/[0.07] shadow-sm p-5 flex flex-col gap-4"
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.4, ease: EASE }}
+      className="flex flex-col gap-5 border-t border-paper/10 py-8 last:border-b md:flex-row md:items-start md:justify-between md:gap-10"
     >
-      {/* Header */}
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h3 className="text-base font-bold text-ink">{booking.space.name}</h3>
-          <span className="text-2xs font-bold uppercase tracking-wide text-ink-2">
-            {SPACE_LABELS[booking.space.type]}
-          </span>
-        </div>
-        <span className={cn('shrink-0 inline-flex items-center rounded-full px-2.5 py-1 text-2xs font-bold uppercase tracking-wide', status.classes)}>
-          {status.label}
-        </span>
-      </div>
-
-      {/* Details */}
-      <div className="flex flex-col gap-1.5">
-        <div className="flex items-center gap-2 text-sm text-ink-2">
-          <CalendarDays size={14} className="shrink-0 text-primary/60" />
+      <div className="min-w-0">
+        <p className={cn(MONO, 'text-concrete')}>{SPACE_LABELS[booking.space.type]}</p>
+        <h3
+          className={cn(
+            'mt-2 break-words font-arch font-expanded text-2xl font-extrabold uppercase leading-[1] tracking-[-0.02em] md:text-3xl',
+            muted ? 'text-paper/70' : 'text-paper',
+          )}
+        >
+          {booking.space.name}
+        </h3>
+        <p className={cn(MONO, 'mt-4 text-paper')}>
           <span className="capitalize">{formatDate(booking.booking_date)}</span>
-        </div>
-        <div className="flex items-center gap-2 text-sm text-ink-2">
-          <Clock size={14} className="shrink-0 text-primary/60" />
-          <span>{booking.slot.label}</span>
-        </div>
-        <div className="flex items-center gap-2 text-sm text-ink-2">
-          <MapPin size={14} className="shrink-0 text-primary/60" />
-          <button
-            onClick={() => navigate(`/canchas/${booking.space.id}`)}
-            className="hover:text-primary hover:underline transition-colors"
-          >
-            Ver cancha
-          </button>
-        </div>
+          <span className="text-concrete"> · </span>
+          {booking.slot.label}
+          <span className="text-concrete"> · </span>${formatPrice(booking.total_price)}
+        </p>
+        <p className={cn(MONO, 'mt-3 flex items-center gap-2', status.text)}>
+          <span aria-hidden="true" className={cn('inline-block size-1.5 shrink-0', status.dot)} />
+          {status.label}
+        </p>
       </div>
 
-      {/* Footer */}
-      <div className="flex items-center justify-between pt-3 border-t border-black/[0.05]">
-        <span className="font-serif text-2xl text-ink">
-          ${booking.total_price.toLocaleString('es-AR')}
-        </span>
+      <div className="flex shrink-0 items-center gap-8">
+        <button
+          type="button"
+          onClick={() => navigate(`/canchas/${booking.space.id}`)}
+          className={cn(buttonVariants({ variant: 'line' }), MONO, 'h-auto py-1 text-concrete hover:text-paper')}
+        >
+          Ver cancha
+        </button>
         {canCancel && (
           <button
+            type="button"
             onClick={() => onCancel(booking)}
-            className="flex items-center gap-1.5 text-sm font-semibold text-status-cancelled hover:bg-status-cancelled/8 px-3 py-1.5 rounded-lg transition-all active:scale-[0.98]"
+            className={cn(buttonVariants({ variant: 'line' }), MONO, 'h-auto py-1 text-paper')}
           >
-            <XCircle size={14} /> Cancelar
+            Cancelar
           </button>
         )}
       </div>
-    </motion.div>
+    </motion.li>
   );
 }
 
 export default function MyBookingsPage() {
   const queryClient = useQueryClient();
+  const reduce = useReducedMotion();
   const [cancelTarget, setCancelTarget] = useState<BookingDetail | null>(null);
 
   const { data: bookings, isLoading } = useQuery({
@@ -114,124 +116,164 @@ export default function MyBookingsPage() {
   const active = bookings?.filter((b) => b.status === 'pending' || b.status === 'confirmed') ?? [];
   const past   = bookings?.filter((b) => b.status === 'cancelled' || b.status === 'completed') ?? [];
 
+  const y = reduce ? 0 : 12;
+
   return (
-    <div className="animate-fade-up min-h-[calc(100vh-58px)] bg-bg">
+    <div className="landing">
+      <div className="on-dark min-h-[100svh] bg-night text-paper">
+        <LandingNav solid />
 
-      {/* Header */}
-      <div className="bg-surface border-b border-black/[0.06]">
-        <div className="max-w-[1140px] mx-auto px-6 py-12">
-          <span className="text-2xs font-bold tracking-[0.1em] uppercase text-primary mb-1.5 block">
-            Mi cuenta
-          </span>
-          <h1 className="font-serif text-4xl text-ink tracking-tight">Mis reservas</h1>
-        </div>
-      </div>
+        <main className="relative pt-16 md:pt-20">
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-x-0 top-16 h-[160px] bg-gradient-to-b from-light/10 to-transparent md:top-20 md:h-[200px]"
+          />
+          <LightLine className="absolute inset-x-0 top-16 md:top-20" delay={0.3} />
 
-      <div className="max-w-[1140px] mx-auto px-6 py-10">
+          <div className={cn(CONTAINER, 'relative pb-20 pt-14 md:pb-28 md:pt-20 lg:pb-32')}>
+            <SectionLabel number="H1" label="Mis reservas" />
 
-        {isLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="h-52 bg-white rounded-xl border-[1.5px] border-black/[0.07] animate-pulse" />
-            ))}
-          </div>
-        ) : !bookings?.length ? (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.96 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="flex flex-col items-center justify-center py-24 text-center"
-          >
-            <div className="w-14 h-14 rounded-xl bg-surface flex items-center justify-center mb-4">
-              <LayoutGrid size={24} className="text-ink-2/50" />
-            </div>
-            <p className="text-base font-semibold text-ink mb-1">Sin reservas todavía</p>
-            <p className="text-sm text-ink-2 mb-6">Explorá nuestras canchas y reservá tu primer turno.</p>
-            <a
-              href="/canchas"
-              className="bg-primary text-white font-bold rounded-lg px-6 py-3 text-sm transition-all hover:bg-primary-dark hover:shadow-glow active:scale-[0.98]"
+            <h1 className="mt-10 break-words font-arch font-expanded text-[clamp(2.25rem,min(9vw,14vh),7.5rem)] font-extrabold uppercase leading-[0.9] tracking-[-0.02em] text-paper md:mt-14">
+              <motion.span
+                className="block"
+                initial={{ opacity: 0, y: reduce ? 0 : 28 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.7, ease: EASE, delay: 0.15 }}
+              >
+                Mis reservas
+              </motion.span>
+            </h1>
+
+            <motion.div
+              className="mt-14 md:mt-20"
+              initial={{ opacity: 0, y }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.7, ease: EASE, delay: 0.35 }}
             >
-              Ver canchas
-            </a>
-          </motion.div>
-        ) : (
-          <div className="flex flex-col gap-10">
-
-            {/* Active bookings */}
-            {active.length > 0 && (
-              <section>
-                <h2 className="text-2xs font-bold tracking-[0.1em] uppercase text-primary mb-4">
-                  Próximas
-                </h2>
-                <AnimatePresence mode="popLayout">
-                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-                    {active.map((b) => (
-                      <BookingCard key={b.id} booking={b} onCancel={setCancelTarget} />
-                    ))}
-                  </div>
-                </AnimatePresence>
-              </section>
-            )}
-
-            {/* Past bookings */}
-            {past.length > 0 && (
-              <section>
-                <h2 className="text-2xs font-bold tracking-[0.1em] uppercase text-ink-2 mb-4">
-                  Historial
-                </h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-                  {past.map((b) => (
-                    <BookingCard key={b.id} booking={b} onCancel={setCancelTarget} />
+              {isLoading ? (
+                <div aria-busy="true" aria-label="Cargando reservas" className="flex flex-col gap-4">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <div key={i} className="h-28 animate-pulse bg-graphite motion-reduce:animate-none" />
                   ))}
                 </div>
-              </section>
-            )}
+              ) : !bookings?.length ? (
+                <div className="max-w-md">
+                  <p className="font-arch font-expanded text-xl font-bold uppercase leading-tight tracking-[-0.02em] text-paper md:text-2xl">
+                    Sin reservas todavía
+                  </p>
+                  <p className="mt-4 text-base leading-relaxed text-paper/85 md:text-lg">
+                    Explorá nuestras canchas y reservá tu primer turno.
+                  </p>
+                  <a
+                    href="/canchas"
+                    className={cn(buttonVariants({ variant: 'court' }), 'mt-8 h-14 px-8 text-base font-semibold')}
+                  >
+                    Ver canchas
+                  </a>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-16 md:gap-20">
+                  {/* Active bookings */}
+                  {active.length > 0 && (
+                    <section aria-labelledby="active-bookings-title">
+                      <h2 id="active-bookings-title" className={cn(MONO, 'mb-6 text-paper')}>
+                        Próximas
+                        <span className="ml-3 text-concrete">{String(active.length).padStart(2, '0')}</span>
+                      </h2>
+                      <ul>
+                        <AnimatePresence mode="popLayout">
+                          {active.map((b) => (
+                            <BookingRow key={b.id} booking={b} onCancel={setCancelTarget} />
+                          ))}
+                        </AnimatePresence>
+                      </ul>
+                    </section>
+                  )}
+
+                  {/* Past bookings */}
+                  {past.length > 0 && (
+                    <section aria-labelledby="past-bookings-title">
+                      <h2 id="past-bookings-title" className={cn(MONO, 'mb-6 text-concrete')}>
+                        Historial
+                        <span className="ml-3">{String(past.length).padStart(2, '0')}</span>
+                      </h2>
+                      <ul>
+                        {past.map((b) => (
+                          <BookingRow key={b.id} booking={b} onCancel={setCancelTarget} muted />
+                        ))}
+                      </ul>
+                    </section>
+                  )}
+                </div>
+              )}
+            </motion.div>
           </div>
-        )}
+        </main>
+
+        <LandingFooter />
       </div>
 
       {/* Cancel dialog */}
       <AnimatePresence>
         {cancelTarget && (
           <ModalPortal>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm"
-              onClick={() => setCancelTarget(null)}
-            />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.94, y: 16 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.94, y: 16 }}
-              transition={{ duration: 0.22 }}
-              className="fixed inset-x-4 bottom-6 sm:inset-auto sm:left-1/2 sm:-translate-x-1/2 sm:top-1/2 sm:-translate-y-1/2 sm:w-[400px] z-50 bg-white rounded-2xl shadow-xl p-6"
-            >
-              <h3 className="font-serif text-xl text-ink mb-1">¿Cancelar reserva?</h3>
-              <p className="text-sm text-ink-2 mb-6">
-                <strong className="text-ink">{cancelTarget.space.name}</strong>
-                {' · '}
-                <span className="capitalize">{formatDate(cancelTarget.booking_date)}</span>
-              </p>
-              {cancelMutation.error && (
-                <p className="text-xs text-status-cancelled mb-3">{cancelMutation.error.message}</p>
-              )}
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setCancelTarget(null)}
-                  className="flex-1 bg-surface text-ink font-semibold rounded-lg py-3 text-sm transition-all hover:bg-surface-2 active:scale-[0.98]"
+            {/* Portal renders outside .landing, so re-scope the landing tokens (zero-size, no transform). */}
+            <div className="landing on-dark">
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 z-40 bg-night/80"
+                onClick={() => setCancelTarget(null)}
+              />
+              <div className="pointer-events-none fixed inset-0 z-50 flex items-end justify-center p-4 sm:items-center">
+                <motion.div
+                  role="dialog"
+                  aria-modal="true"
+                  aria-labelledby="cancel-dialog-title"
+                  initial={{ opacity: 0, y: 16 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 16 }}
+                  transition={{ duration: 0.22 }}
+                  className="pointer-events-auto relative w-full border border-paper/10 bg-graphite p-6 text-paper sm:w-[420px] sm:p-8"
                 >
-                  Volver
-                </button>
-                <button
-                  onClick={() => cancelMutation.mutate(cancelTarget.id)}
-                  disabled={cancelMutation.isPending}
-                  className="flex-1 bg-status-cancelled/10 border-[1.5px] border-status-cancelled/20 text-status-cancelled font-bold rounded-lg py-3 text-sm transition-all hover:bg-status-cancelled/18 active:scale-[0.98] disabled:opacity-60"
-                >
-                  {cancelMutation.isPending ? 'Cancelando...' : 'Sí, cancelar'}
-                </button>
+                  <LightLine className="absolute inset-x-0 top-0" delay={0.1} />
+                  <h3
+                    id="cancel-dialog-title"
+                    className="font-arch font-expanded text-2xl font-bold uppercase leading-none tracking-[-0.02em] text-paper"
+                  >
+                    ¿Cancelar reserva?
+                  </h3>
+                  <p className={cn(MONO, 'mt-6 text-concrete')}>
+                    <span className="text-paper">{cancelTarget.space.name}</span>
+                    {' · '}
+                    <span className="capitalize">{formatDate(cancelTarget.booking_date)}</span>
+                  </p>
+                  {cancelMutation.error && (
+                    <p role="alert" className={cn(MONO, 'mt-4 normal-case tracking-normal text-red-300')}>
+                      {cancelMutation.error.message}
+                    </p>
+                  )}
+                  <div className="mt-8 flex flex-col-reverse gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <button
+                      type="button"
+                      onClick={() => setCancelTarget(null)}
+                      className={cn(buttonVariants({ variant: 'line' }), MONO, 'h-auto justify-center py-2 text-paper')}
+                    >
+                      Volver
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => cancelMutation.mutate(cancelTarget.id)}
+                      disabled={cancelMutation.isPending}
+                      className={cn(buttonVariants({ variant: 'court' }), 'h-12 justify-center px-6 text-sm font-semibold')}
+                    >
+                      {cancelMutation.isPending ? 'Cancelando...' : 'Sí, cancelar'}
+                    </button>
+                  </div>
+                </motion.div>
               </div>
-            </motion.div>
+            </div>
           </ModalPortal>
         )}
       </AnimatePresence>

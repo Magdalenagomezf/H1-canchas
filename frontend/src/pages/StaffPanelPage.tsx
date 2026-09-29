@@ -1,10 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import {
-  CalendarDays, Clock, User, Phone, XCircle, Plus, ChevronLeft, ChevronRight,
-  Pencil, Trash2, ShieldCheck, Repeat, Wrench, Ban,
-} from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { ArrowLeft, ArrowRight, Pencil, Trash2 } from 'lucide-react';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import {
   getAllBookings, cancelBooking, createManualBooking,
   createRecurringBooking, createMaintenanceBlock, getBatches, cancelBatch,
@@ -12,21 +9,26 @@ import {
 import { getSpaces, getSlots, createSpace, updateSpace, deleteSpace } from '../api/spaces';
 import { getUsers, createStaffUser, updateUserRole, deleteUser } from '../api/users';
 import type { BookingDetail, BookingStatus, BookingBatch } from '../types';
-import { SPACE_LABELS, SPACE_ICONS } from '../components/SpaceCard';
+import { SPACE_LABELS } from '../components/SpaceCard';
 import { ModalPortal } from '../components/ModalPortal';
 import { useAuth } from '../hooks/useAuth';
 import { cn } from '@/lib/utils';
+import { buttonVariants } from '@/components/ui/button';
+import { LandingNav } from '@/components/landing/LandingNav';
+import { LightLine } from '@/components/landing/LightLine';
+import { SectionLabel } from '@/components/landing/SectionLabel';
+import { CONTAINER, EASE, MONO } from '@/components/landing/ui';
 
 type Tab = 'bookings' | 'fixed' | 'spaces' | 'users';
 
 const WEEKDAYS_SHORT = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 const WEEKDAYS_LONG = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
 
-const STATUS_CONFIG: Record<BookingStatus, { label: string; classes: string }> = {
-  pending:   { label: 'Pendiente',  classes: 'bg-status-pending/10 text-status-pending' },
-  confirmed: { label: 'Confirmada', classes: 'bg-status-confirmed/10 text-status-confirmed' },
-  cancelled: { label: 'Cancelada',  classes: 'bg-status-cancelled/10 text-status-cancelled' },
-  completed: { label: 'Completada', classes: 'bg-status-completed/10 text-status-completed' },
+const STATUS_CONFIG: Record<BookingStatus, { label: string; dot: string; text: string }> = {
+  pending:   { label: 'Pendiente',  dot: 'bg-light',    text: 'text-light' },
+  confirmed: { label: 'Confirmada', dot: 'bg-paper',    text: 'text-paper' },
+  cancelled: { label: 'Cancelada',  dot: 'bg-concrete', text: 'text-concrete' },
+  completed: { label: 'Completada', dot: 'bg-concrete', text: 'text-concrete' },
 };
 
 const TZ = 'America/Argentina/Buenos_Aires';
@@ -49,7 +51,93 @@ function shiftDate(iso: string, days: number) {
 
 const today = toArgISO(new Date());
 
-// ── Booking card ──────────────────────────────────────────────────────────────
+// ── Shared style tokens ───────────────────────────────────────────────────────
+const FIELD =
+  'w-full border-0 border-b border-paper/25 bg-transparent py-2.5 text-base text-paper [color-scheme:dark] placeholder:text-paper/40 outline-none transition-colors duration-300 focus:border-paper focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-paper disabled:opacity-50 [&_option]:bg-night [&_option]:text-paper';
+const LABEL = cn(MONO, 'mb-1 block text-concrete');
+const BTN_PRIMARY = cn(buttonVariants({ variant: 'court' }), 'h-11 justify-center px-6 text-sm font-semibold');
+const BTN_LINE = cn(buttonVariants({ variant: 'line' }), MONO, 'h-auto justify-center py-1 text-paper');
+const BTN_LINE_MUTED = cn(buttonVariants({ variant: 'line' }), MONO, 'h-auto justify-center py-1 text-concrete hover:text-paper');
+const ERROR_TEXT = cn(MONO, 'normal-case tracking-normal text-red-300');
+const TH = cn(MONO, 'whitespace-nowrap px-3 py-3 text-left font-normal text-concrete');
+const TD = 'px-3 py-4 align-top';
+const ROW = 'border-t border-paper/10 transition-colors last:border-b hover:bg-graphite/50';
+const SECTION_TITLE =
+  'font-arch font-expanded text-xl font-bold uppercase leading-none tracking-[-0.02em] text-paper md:text-2xl';
+const DIALOG_TITLE =
+  'font-arch font-expanded text-2xl font-bold uppercase leading-none tracking-[-0.02em] text-paper';
+
+const choiceClass = (selected: boolean) =>
+  cn(
+    MONO,
+    'border px-2 py-2.5 text-center outline-none transition-colors duration-300 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-paper',
+    selected ? 'border-light text-paper' : 'border-paper/15 text-concrete hover:border-paper/40 hover:text-paper',
+  );
+
+/** Centered square night panel. Lives inside ModalPortal, so it re-scopes the landing tokens. */
+function DialogPanel({
+  onClose,
+  labelledBy,
+  wide = false,
+  children,
+}: {
+  onClose: () => void;
+  labelledBy: string;
+  wide?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="landing on-dark">
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 z-40 bg-night/80"
+        onClick={onClose}
+      />
+      <div className="pointer-events-none fixed inset-0 z-50 flex items-end justify-center p-4 sm:items-center">
+        <motion.div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={labelledBy}
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 16 }}
+          transition={{ duration: 0.22 }}
+          className={cn(
+            'pointer-events-auto relative max-h-[90svh] w-full overflow-y-auto border border-paper/10 bg-graphite p-6 text-paper sm:p-8',
+            wide ? 'sm:w-[480px]' : 'sm:w-[420px]',
+          )}
+        >
+          <LightLine className="absolute inset-x-0 top-0" delay={0.1} />
+          {children}
+        </motion.div>
+      </div>
+    </div>
+  );
+}
+
+function BookingsTable({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[760px] border-collapse text-left">
+        <thead>
+          <tr>
+            <th scope="col" className={TH}>Espacio</th>
+            <th scope="col" className={TH}>Turno</th>
+            <th scope="col" className={TH}>Cliente</th>
+            <th scope="col" className={TH}>Estado</th>
+            <th scope="col" className={cn(TH, 'text-right')}>Precio</th>
+            <th scope="col" className={TH}><span className="sr-only">Acciones</span></th>
+          </tr>
+        </thead>
+        {children}
+      </table>
+    </div>
+  );
+}
+
+// ── Booking row ───────────────────────────────────────────────────────────────
 function BookingRow({
   booking,
   onCancel,
@@ -61,69 +149,51 @@ function BookingRow({
   const canCancel = booking.status === 'pending' || booking.status === 'confirmed';
 
   return (
-    <motion.div
+    <motion.tr
       layout
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.97 }}
-      transition={{ duration: 0.25 }}
-      className="bg-white rounded-xl border-[1.5px] border-black/[0.07] shadow-sm p-4 flex flex-col sm:flex-row sm:items-center gap-4"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.3, ease: EASE }}
+      className={ROW}
     >
       {/* Space + slot */}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-1">
-          <span className="text-base font-bold text-ink truncate">{booking.space.name}</span>
-          <span className={cn('shrink-0 inline-flex items-center rounded-full px-2 py-0.5 text-2xs font-bold uppercase tracking-wide', status.classes)}>
-            {status.label}
-          </span>
-          {booking.batch && (
-            <span className="shrink-0 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-2xs font-bold uppercase tracking-wide bg-primary/10 text-primary">
-              {booking.batch.type === 'recurring_teacher' ? <Repeat size={10} /> : <Wrench size={10} />}
-              {booking.batch.type === 'recurring_teacher' ? 'Turno fijo' : 'Mantenimiento'}
-            </span>
-          )}
-        </div>
-        <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-ink-2">
-          <span className="flex items-center gap-1.5">
-            <Clock size={13} className="text-primary/50" />
-            {booking.slot.label}
-          </span>
-          <span className="text-2xs font-bold uppercase tracking-wide text-ink-2/60">
-            {SPACE_LABELS[booking.space.type]}
-          </span>
-        </div>
+      <td className={cn(TD, 'min-w-0')}>
+        <p className="font-arch text-base font-semibold text-paper">{booking.space.name}</p>
+        <p className={cn(MONO, 'mt-1 text-concrete')}>{SPACE_LABELS[booking.space.type]}</p>
         {booking.batch && (
-          <p className="text-sm text-ink-2 mt-1 truncate">{booking.batch.reason}</p>
+          <p className={cn(MONO, 'mt-1 text-paper')}>
+            {booking.batch.type === 'recurring_teacher' ? 'Turno fijo' : 'Mantenimiento'}
+            <span className="text-concrete"> · {booking.batch.reason}</span>
+          </p>
         )}
-      </div>
+      </td>
+
+      <td className={cn(TD, MONO, 'whitespace-nowrap text-paper')}>{booking.slot.label}</td>
 
       {/* Customer */}
-      <div className="flex flex-col gap-0.5 sm:w-44 shrink-0">
-        <span className="flex items-center gap-1.5 text-sm font-semibold text-ink">
-          <User size={13} className="text-primary/50 shrink-0" />
-          {booking.customer.name}
-        </span>
-        <span className="flex items-center gap-1.5 text-sm text-ink-2">
-          <Phone size={13} className="text-primary/50 shrink-0" />
-          {booking.customer.phone}
-        </span>
-      </div>
+      <td className={TD}>
+        <p className="text-sm font-medium text-paper">{booking.customer.name}</p>
+        <p className={cn(MONO, 'mt-1 text-concrete')}>{booking.customer.phone}</p>
+      </td>
+
+      <td className={cn(TD, MONO, 'whitespace-nowrap', status.text)}>
+        <span aria-hidden="true" className={cn('mr-2 inline-block size-1.5 align-middle', status.dot)} />
+        {status.label}
+      </td>
 
       {/* Price + cancel */}
-      <div className="flex items-center justify-between sm:justify-end gap-4 shrink-0">
-        <span className="font-serif text-xl text-ink">
-          ${booking.total_price.toLocaleString('es-AR')}
-        </span>
+      <td className={cn(TD, MONO, 'whitespace-nowrap text-right text-paper')}>
+        ${booking.total_price.toLocaleString('es-AR')}
+      </td>
+      <td className={cn(TD, 'whitespace-nowrap text-right')}>
         {canCancel && (
-          <button
-            onClick={() => onCancel(booking)}
-            className="flex items-center gap-1 text-sm font-semibold text-status-cancelled hover:bg-status-cancelled/8 px-2.5 py-1.5 rounded-lg transition-all active:scale-[0.98]"
-          >
-            <XCircle size={14} /> Cancelar
+          <button type="button" onClick={() => onCancel(booking)} className={BTN_LINE}>
+            Cancelar
           </button>
         )}
-      </div>
-    </motion.div>
+      </td>
+    </motion.tr>
   );
 }
 
@@ -165,39 +235,24 @@ function ManualBookingDialog({
     },
   });
 
-  const inputClass =
-    'w-full px-3.5 py-2.5 bg-surface border-[1.5px] border-black/10 rounded-lg text-sm font-medium text-ink placeholder:text-ink-2/60 outline-none transition-all duration-normal focus:border-primary focus:ring-2 focus:ring-primary/[0.13]';
-
   return (
     <ModalPortal>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm"
-        onClick={onClose}
-      />
-      <motion.div
-        initial={{ opacity: 0, scale: 0.94, y: 16 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.94, y: 16 }}
-        transition={{ duration: 0.22 }}
-        className="fixed inset-x-4 bottom-4 sm:inset-auto sm:left-1/2 sm:-translate-x-1/2 sm:top-1/2 sm:-translate-y-1/2 sm:w-[460px] z-50 bg-white rounded-2xl shadow-xl p-6 max-h-[90vh] overflow-y-auto"
-      >
-        <h3 className="font-serif text-xl text-ink mb-5">Nueva reserva manual</h3>
+      <DialogPanel onClose={onClose} labelledBy="manual-dialog-title" wide>
+        <h3 id="manual-dialog-title" className={cn(DIALOG_TITLE, 'mb-8')}>Nueva reserva manual</h3>
 
         <form
           onSubmit={(e) => { e.preventDefault(); mutation.mutate(); }}
-          className="flex flex-col gap-4"
+          className="flex flex-col gap-6"
         >
           {/* Space */}
           <div>
-            <label className="text-2xs font-bold uppercase tracking-wide text-ink-2 mb-1.5 block">Espacio</label>
+            <label htmlFor="manual-space" className={LABEL}>Espacio</label>
             <select
+              id="manual-space"
               value={spaceId}
               onChange={(e) => { setSpaceId(Number(e.target.value)); setSlotId(''); }}
               required
-              className={inputClass}
+              className={FIELD}
             >
               <option value="">Seleccioná un espacio</option>
               {spaces?.map((s) => (
@@ -208,36 +263,33 @@ function ManualBookingDialog({
 
           {/* Date */}
           <div>
-            <label className="text-2xs font-bold uppercase tracking-wide text-ink-2 mb-1.5 block">Fecha</label>
+            <label htmlFor="manual-date" className={LABEL}>Fecha</label>
             <input
+              id="manual-date"
               type="date"
               value={date}
               onChange={(e) => { setDate(e.target.value); setSlotId(''); }}
               required
-              className={inputClass}
+              className={FIELD}
             />
           </div>
 
           {/* Slot */}
           <div>
-            <label className="text-2xs font-bold uppercase tracking-wide text-ink-2 mb-1.5 block">Turno</label>
+            <span className={LABEL}>Turno</span>
             {!spaceId ? (
-              <p className="text-sm text-ink-2/60 py-2">Seleccioná un espacio primero.</p>
+              <p className={cn(MONO, 'py-2 text-concrete')}>Seleccioná un espacio primero.</p>
             ) : !slots?.length ? (
-              <p className="text-sm text-ink-2/60 py-2">Sin turnos disponibles para esta fecha.</p>
+              <p className={cn(MONO, 'py-2 text-concrete')}>Sin turnos disponibles para esta fecha.</p>
             ) : (
               <div className="grid grid-cols-2 gap-2">
                 {slots.map((s) => (
                   <button
                     key={s.id}
                     type="button"
+                    aria-pressed={slotId === s.id}
                     onClick={() => setSlotId(s.id)}
-                    className={cn(
-                      'py-2.5 rounded-lg border-[1.5px] text-sm font-semibold transition-all active:scale-[0.98]',
-                      slotId === s.id
-                        ? 'bg-primary/[0.08] border-primary text-primary'
-                        : 'bg-surface border-black/[0.07] text-ink hover:border-primary/40',
-                    )}
+                    className={choiceClass(slotId === s.id)}
                   >
                     {s.label}
                   </button>
@@ -248,49 +300,47 @@ function ManualBookingDialog({
 
           {/* Customer */}
           <div>
-            <label className="text-2xs font-bold uppercase tracking-wide text-ink-2 mb-1.5 block">Cliente</label>
-            <div className="flex flex-col gap-2">
+            <span className={LABEL}>Cliente</span>
+            <div className="flex flex-col gap-3">
               <input
                 type="text"
+                aria-label="Nombre completo"
                 placeholder="Nombre completo"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
-                className={inputClass}
+                className={FIELD}
               />
               <input
                 type="tel"
+                aria-label="Teléfono"
                 placeholder="Teléfono"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 required
-                className={inputClass}
+                className={FIELD}
               />
             </div>
           </div>
 
           {mutation.error && (
-            <p className="text-xs text-status-cancelled font-medium">{mutation.error.message}</p>
+            <p role="alert" className={ERROR_TEXT}>{mutation.error.message}</p>
           )}
 
-          <div className="flex gap-3 mt-1">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 bg-surface text-ink font-semibold rounded-lg py-3 text-sm transition-all hover:bg-surface-2 active:scale-[0.98]"
-            >
+          <div className="mt-2 flex flex-col-reverse gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <button type="button" onClick={onClose} className={BTN_LINE}>
               Cancelar
             </button>
             <button
               type="submit"
               disabled={!spaceId || !slotId || !name || !phone || mutation.isPending}
-              className="flex-1 bg-primary text-white font-bold rounded-lg py-3 text-sm transition-all hover:bg-primary-dark hover:shadow-glow active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+              className={BTN_PRIMARY}
             >
               {mutation.isPending ? 'Guardando...' : 'Confirmar reserva'}
             </button>
           </div>
         </form>
-      </motion.div>
+      </DialogPanel>
     </ModalPortal>
   );
 }
@@ -340,55 +390,44 @@ function RecurringBookingDialog({ defaultDate, onClose }: { defaultDate: string;
     setEndDate(d.toISOString().slice(0, 10));
   };
 
-  const inputClass =
-    'w-full px-3.5 py-2.5 bg-surface border-[1.5px] border-black/10 rounded-lg text-sm font-medium text-ink placeholder:text-ink-2/60 outline-none transition-all duration-normal focus:border-primary focus:ring-2 focus:ring-primary/[0.13]';
-
   return (
     <ModalPortal>
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-        className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={onClose} />
-      <motion.div initial={{ opacity: 0, scale: 0.94, y: 16 }} animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.94, y: 16 }} transition={{ duration: 0.22 }}
-        className="fixed inset-x-4 bottom-4 sm:inset-auto sm:left-1/2 sm:-translate-x-1/2 sm:top-1/2 sm:-translate-y-1/2 sm:w-[460px] z-50 bg-white rounded-2xl shadow-xl p-6 max-h-[90vh] overflow-y-auto"
-      >
+      <DialogPanel onClose={onClose} labelledBy="recurring-dialog-title" wide>
         {result ? (
           <>
-            <h3 className="font-serif text-xl text-ink mb-2">Turno fijo creado</h3>
-            <p className="text-sm text-ink-2 mb-1">
-              Se reservaron <strong className="text-ink">{result.created}</strong> fechas.
+            <h3 id="recurring-dialog-title" className={cn(DIALOG_TITLE, 'mb-6')}>Turno fijo creado</h3>
+            <p className="text-base leading-relaxed text-paper/85">
+              Se reservaron <strong className="font-semibold text-paper">{result.created}</strong> fechas.
             </p>
             {result.skipped > 0 && (
-              <p className="text-sm text-status-pending mb-4">
+              <p className="mt-3 text-base leading-relaxed text-light">
                 {result.skipped} fechas ya estaban ocupadas y se saltearon — revisá la lista para ver cuáles.
               </p>
             )}
-            <button onClick={onClose} className="w-full bg-primary text-white font-bold rounded-lg py-3 text-sm mt-3 hover:bg-primary-dark active:scale-[0.98] transition-all">
+            <button type="button" onClick={onClose} className={cn(BTN_PRIMARY, 'mt-8 w-full')}>
               Listo
             </button>
           </>
         ) : (
           <>
-            <h3 className="font-serif text-xl text-ink mb-1">Nuevo turno fijo</h3>
-            <p className="text-sm text-ink-2 mb-5">Repite el mismo turno todas las semanas, para un profesor u otro cliente fijo.</p>
+            <h3 id="recurring-dialog-title" className={cn(DIALOG_TITLE, 'mb-4')}>Nuevo turno fijo</h3>
+            <p className="mb-8 text-base leading-relaxed text-paper/85">Repite el mismo turno todas las semanas, para un profesor u otro cliente fijo.</p>
 
-            <form onSubmit={(e) => { e.preventDefault(); mutation.mutate(); }} className="flex flex-col gap-4">
+            <form onSubmit={(e) => { e.preventDefault(); mutation.mutate(); }} className="flex flex-col gap-6">
               <div>
-                <label className="text-2xs font-bold uppercase tracking-wide text-ink-2 mb-1.5 block">Espacio</label>
-                <select value={spaceId} onChange={(e) => { setSpaceId(Number(e.target.value)); setSlotId(''); }} required className={inputClass}>
+                <label htmlFor="recurring-space" className={LABEL}>Espacio</label>
+                <select id="recurring-space" value={spaceId} onChange={(e) => { setSpaceId(Number(e.target.value)); setSlotId(''); }} required className={FIELD}>
                   <option value="">Seleccioná un espacio</option>
                   {spaces?.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
               </div>
 
               <div>
-                <label className="text-2xs font-bold uppercase tracking-wide text-ink-2 mb-1.5 block">Día de la semana</label>
+                <span className={LABEL}>Día de la semana</span>
                 <div className="grid grid-cols-7 gap-1.5">
                   {WEEKDAYS_SHORT.map((label, i) => (
-                    <button key={i} type="button" onClick={() => setWeekday(i)}
-                      className={cn(
-                        'py-2 rounded-lg border-[1.5px] text-2xs font-bold transition-all active:scale-[0.96]',
-                        weekday === i ? 'bg-primary/[0.08] border-primary text-primary' : 'bg-surface border-black/[0.07] text-ink-2 hover:border-primary/40',
-                      )}
+                    <button key={i} type="button" aria-pressed={weekday === i} onClick={() => setWeekday(i)}
+                      className={cn(choiceClass(weekday === i), 'px-0')}
                     >
                       {label}
                     </button>
@@ -397,19 +436,16 @@ function RecurringBookingDialog({ defaultDate, onClose }: { defaultDate: string;
               </div>
 
               <div>
-                <label className="text-2xs font-bold uppercase tracking-wide text-ink-2 mb-1.5 block">Turno</label>
+                <span className={LABEL}>Turno</span>
                 {!spaceId ? (
-                  <p className="text-sm text-ink-2/60 py-2">Seleccioná un espacio primero.</p>
+                  <p className={cn(MONO, 'py-2 text-concrete')}>Seleccioná un espacio primero.</p>
                 ) : !slots?.length ? (
-                  <p className="text-sm text-ink-2/60 py-2">Sin turnos para este espacio.</p>
+                  <p className={cn(MONO, 'py-2 text-concrete')}>Sin turnos para este espacio.</p>
                 ) : (
                   <div className="grid grid-cols-2 gap-2">
                     {slots.map((s) => (
-                      <button key={s.id} type="button" onClick={() => setSlotId(s.id)}
-                        className={cn(
-                          'py-2.5 rounded-lg border-[1.5px] text-sm font-semibold transition-all active:scale-[0.98]',
-                          slotId === s.id ? 'bg-primary/[0.08] border-primary text-primary' : 'bg-surface border-black/[0.07] text-ink hover:border-primary/40',
-                        )}
+                      <button key={s.id} type="button" aria-pressed={slotId === s.id} onClick={() => setSlotId(s.id)}
+                        className={choiceClass(slotId === s.id)}
                       >
                         {s.label}
                       </button>
@@ -418,37 +454,37 @@ function RecurringBookingDialog({ defaultDate, onClose }: { defaultDate: string;
                 )}
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-2xs font-bold uppercase tracking-wide text-ink-2 mb-1.5 block">Desde</label>
-                  <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} required className={inputClass} />
+                  <label htmlFor="recurring-start" className={LABEL}>Desde</label>
+                  <input id="recurring-start" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} required className={FIELD} />
                 </div>
                 <div>
-                  <label className="text-2xs font-bold uppercase tracking-wide text-ink-2 mb-1.5 block">Hasta</label>
-                  <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} required className={inputClass} />
+                  <label htmlFor="recurring-end" className={LABEL}>Hasta</label>
+                  <input id="recurring-end" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} required className={FIELD} />
                 </div>
               </div>
-              <button type="button" onClick={setOneYear} className="text-xs font-semibold text-primary hover:underline self-start -mt-2">
+              <button type="button" onClick={setOneYear} className={cn(BTN_LINE_MUTED, 'self-start -mt-3')}>
                 Poner 1 año desde la fecha de inicio
               </button>
 
               <div>
-                <label className="text-2xs font-bold uppercase tracking-wide text-ink-2 mb-1.5 block">Cliente / profesor</label>
-                <div className="flex flex-col gap-2">
-                  <input type="text" placeholder="Nombre completo" value={name} onChange={(e) => setName(e.target.value)} required className={inputClass} />
-                  <input type="tel" placeholder="Teléfono" value={phone} onChange={(e) => setPhone(e.target.value)} required className={inputClass} />
-                  <input type="text" placeholder="Nota (opcional, ej. 'Clases de pádel')" value={note} onChange={(e) => setNote(e.target.value)} className={inputClass} />
+                <span className={LABEL}>Cliente / profesor</span>
+                <div className="flex flex-col gap-3">
+                  <input type="text" aria-label="Nombre completo" placeholder="Nombre completo" value={name} onChange={(e) => setName(e.target.value)} required className={FIELD} />
+                  <input type="tel" aria-label="Teléfono" placeholder="Teléfono" value={phone} onChange={(e) => setPhone(e.target.value)} required className={FIELD} />
+                  <input type="text" aria-label="Nota (opcional)" placeholder="Nota (opcional, ej. 'Clases de pádel')" value={note} onChange={(e) => setNote(e.target.value)} className={FIELD} />
                 </div>
               </div>
 
-              {mutation.error && <p className="text-xs text-status-cancelled font-medium">{mutation.error.message}</p>}
+              {mutation.error && <p role="alert" className={ERROR_TEXT}>{mutation.error.message}</p>}
 
-              <div className="flex gap-3 mt-1">
-                <button type="button" onClick={onClose} className="flex-1 bg-surface text-ink font-semibold rounded-lg py-3 text-sm transition-all hover:bg-surface-2 active:scale-[0.98]">
+              <div className="mt-2 flex flex-col-reverse gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <button type="button" onClick={onClose} className={BTN_LINE}>
                   Cancelar
                 </button>
                 <button type="submit" disabled={!spaceId || weekday === null || !slotId || !startDate || !endDate || !name || !phone || mutation.isPending}
-                  className="flex-1 bg-primary text-white font-bold rounded-lg py-3 text-sm transition-all hover:bg-primary-dark hover:shadow-glow active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                  className={BTN_PRIMARY}
                 >
                   {mutation.isPending ? 'Guardando...' : 'Crear turno fijo'}
                 </button>
@@ -456,7 +492,7 @@ function RecurringBookingDialog({ defaultDate, onClose }: { defaultDate: string;
             </form>
           </>
         )}
-      </motion.div>
+      </DialogPanel>
     </ModalPortal>
   );
 }
@@ -494,56 +530,46 @@ function MaintenanceBlockDialog({ defaultDate, onClose }: { defaultDate: string;
     },
   });
 
-  const inputClass =
-    'w-full px-3.5 py-2.5 bg-surface border-[1.5px] border-black/10 rounded-lg text-sm font-medium text-ink placeholder:text-ink-2/60 outline-none transition-all duration-normal focus:border-primary focus:ring-2 focus:ring-primary/[0.13]';
-
   return (
     <ModalPortal>
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-        className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={onClose} />
-      <motion.div initial={{ opacity: 0, scale: 0.94, y: 16 }} animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.94, y: 16 }} transition={{ duration: 0.22 }}
-        className="fixed inset-x-4 bottom-4 sm:inset-auto sm:left-1/2 sm:-translate-x-1/2 sm:top-1/2 sm:-translate-y-1/2 sm:w-[460px] z-50 bg-white rounded-2xl shadow-xl p-6 max-h-[90vh] overflow-y-auto"
-      >
+      <DialogPanel onClose={onClose} labelledBy="block-dialog-title" wide>
         {result ? (
           <>
-            <h3 className="font-serif text-xl text-ink mb-2">Bloqueo creado</h3>
-            <p className="text-sm text-ink-2 mb-1">
-              Se bloquearon <strong className="text-ink">{result.created}</strong> turnos.
+            <h3 id="block-dialog-title" className={cn(DIALOG_TITLE, 'mb-6')}>Bloqueo creado</h3>
+            <p className="text-base leading-relaxed text-paper/85">
+              Se bloquearon <strong className="font-semibold text-paper">{result.created}</strong> turnos.
             </p>
             {result.skipped > 0 && (
-              <p className="text-sm text-status-pending mb-4">
+              <p className="mt-3 text-base leading-relaxed text-light">
                 {result.skipped} ya tenían una reserva y se saltearon — esa reserva sigue en pie, contactá al cliente si hace falta reprogramarla.
               </p>
             )}
-            <button onClick={onClose} className="w-full bg-primary text-white font-bold rounded-lg py-3 text-sm mt-3 hover:bg-primary-dark active:scale-[0.98] transition-all">
+            <button type="button" onClick={onClose} className={cn(BTN_PRIMARY, 'mt-8 w-full')}>
               Listo
             </button>
           </>
         ) : (
           <>
-            <h3 className="font-serif text-xl text-ink mb-1">Nuevo bloqueo por mantenimiento</h3>
-            <p className="text-sm text-ink-2 mb-5">Bloquea uno o todos los turnos de una cancha durante un rango de días.</p>
+            <h3 id="block-dialog-title" className={cn(DIALOG_TITLE, 'mb-4')}>Nuevo bloqueo por mantenimiento</h3>
+            <p className="mb-8 text-base leading-relaxed text-paper/85">Bloquea uno o todos los turnos de una cancha durante un rango de días.</p>
 
-            <form onSubmit={(e) => { e.preventDefault(); mutation.mutate(); }} className="flex flex-col gap-4">
+            <form onSubmit={(e) => { e.preventDefault(); mutation.mutate(); }} className="flex flex-col gap-6">
               <div>
-                <label className="text-2xs font-bold uppercase tracking-wide text-ink-2 mb-1.5 block">Espacio</label>
-                <select value={spaceId} onChange={(e) => { setSpaceId(Number(e.target.value)); setSlotId(''); }} required className={inputClass}>
+                <label htmlFor="block-space" className={LABEL}>Espacio</label>
+                <select id="block-space" value={spaceId} onChange={(e) => { setSpaceId(Number(e.target.value)); setSlotId(''); }} required className={FIELD}>
                   <option value="">Seleccioná un espacio</option>
                   {spaces?.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
               </div>
 
               <div className="flex gap-2">
-                <button type="button" onClick={() => setWholeSpace(true)}
-                  className={cn('flex-1 py-2.5 rounded-lg border-[1.5px] text-sm font-semibold transition-all active:scale-[0.98]',
-                    wholeSpace ? 'bg-primary/[0.08] border-primary text-primary' : 'bg-surface border-black/[0.07] text-ink-2 hover:border-primary/40')}
+                <button type="button" aria-pressed={wholeSpace} onClick={() => setWholeSpace(true)}
+                  className={cn(choiceClass(wholeSpace), 'flex-1')}
                 >
                   Todos los turnos
                 </button>
-                <button type="button" onClick={() => setWholeSpace(false)}
-                  className={cn('flex-1 py-2.5 rounded-lg border-[1.5px] text-sm font-semibold transition-all active:scale-[0.98]',
-                    !wholeSpace ? 'bg-primary/[0.08] border-primary text-primary' : 'bg-surface border-black/[0.07] text-ink-2 hover:border-primary/40')}
+                <button type="button" aria-pressed={!wholeSpace} onClick={() => setWholeSpace(false)}
+                  className={cn(choiceClass(!wholeSpace), 'flex-1')}
                 >
                   Un turno puntual
                 </button>
@@ -551,19 +577,16 @@ function MaintenanceBlockDialog({ defaultDate, onClose }: { defaultDate: string;
 
               {!wholeSpace && (
                 <div>
-                  <label className="text-2xs font-bold uppercase tracking-wide text-ink-2 mb-1.5 block">Turno</label>
+                  <span className={LABEL}>Turno</span>
                   {!spaceId ? (
-                    <p className="text-sm text-ink-2/60 py-2">Seleccioná un espacio primero.</p>
+                    <p className={cn(MONO, 'py-2 text-concrete')}>Seleccioná un espacio primero.</p>
                   ) : !slots?.length ? (
-                    <p className="text-sm text-ink-2/60 py-2">Sin turnos para este espacio.</p>
+                    <p className={cn(MONO, 'py-2 text-concrete')}>Sin turnos para este espacio.</p>
                   ) : (
                     <div className="grid grid-cols-2 gap-2">
                       {slots.map((s) => (
-                        <button key={s.id} type="button" onClick={() => setSlotId(s.id)}
-                          className={cn(
-                            'py-2.5 rounded-lg border-[1.5px] text-sm font-semibold transition-all active:scale-[0.98]',
-                            slotId === s.id ? 'bg-primary/[0.08] border-primary text-primary' : 'bg-surface border-black/[0.07] text-ink hover:border-primary/40',
-                          )}
+                        <button key={s.id} type="button" aria-pressed={slotId === s.id} onClick={() => setSlotId(s.id)}
+                          className={choiceClass(slotId === s.id)}
                         >
                           {s.label}
                         </button>
@@ -573,30 +596,30 @@ function MaintenanceBlockDialog({ defaultDate, onClose }: { defaultDate: string;
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-2xs font-bold uppercase tracking-wide text-ink-2 mb-1.5 block">Desde</label>
-                  <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} required className={inputClass} />
+                  <label htmlFor="block-start" className={LABEL}>Desde</label>
+                  <input id="block-start" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} required className={FIELD} />
                 </div>
                 <div>
-                  <label className="text-2xs font-bold uppercase tracking-wide text-ink-2 mb-1.5 block">Hasta</label>
-                  <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} required className={inputClass} />
+                  <label htmlFor="block-end" className={LABEL}>Hasta</label>
+                  <input id="block-end" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} required className={FIELD} />
                 </div>
               </div>
 
               <div>
-                <label className="text-2xs font-bold uppercase tracking-wide text-ink-2 mb-1.5 block">Motivo</label>
-                <input type="text" placeholder="Ej. Cambio de red, poda, pintura..." value={reason} onChange={(e) => setReason(e.target.value)} required className={inputClass} />
+                <label htmlFor="block-reason" className={LABEL}>Motivo</label>
+                <input id="block-reason" type="text" placeholder="Ej. Cambio de red, poda, pintura..." value={reason} onChange={(e) => setReason(e.target.value)} required className={FIELD} />
               </div>
 
-              {mutation.error && <p className="text-xs text-status-cancelled font-medium">{mutation.error.message}</p>}
+              {mutation.error && <p role="alert" className={ERROR_TEXT}>{mutation.error.message}</p>}
 
-              <div className="flex gap-3 mt-1">
-                <button type="button" onClick={onClose} className="flex-1 bg-surface text-ink font-semibold rounded-lg py-3 text-sm transition-all hover:bg-surface-2 active:scale-[0.98]">
+              <div className="mt-2 flex flex-col-reverse gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <button type="button" onClick={onClose} className={BTN_LINE}>
                   Cancelar
                 </button>
                 <button type="submit" disabled={!spaceId || (!wholeSpace && !slotId) || !startDate || !endDate || !reason || mutation.isPending}
-                  className="flex-1 bg-primary text-white font-bold rounded-lg py-3 text-sm transition-all hover:bg-primary-dark hover:shadow-glow active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                  className={BTN_PRIMARY}
                 >
                   {mutation.isPending ? 'Guardando...' : 'Crear bloqueo'}
                 </button>
@@ -604,53 +627,67 @@ function MaintenanceBlockDialog({ defaultDate, onClose }: { defaultDate: string;
             </form>
           </>
         )}
-      </motion.div>
+      </DialogPanel>
     </ModalPortal>
   );
 }
 
 // ── Fixed slots panel (turnos fijos + bloqueos) ────────────────────────────────
+function BatchesTable({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[760px] border-collapse text-left">
+        <thead>
+          <tr>
+            <th scope="col" className={TH}>Espacio</th>
+            <th scope="col" className={TH}>Turno</th>
+            <th scope="col" className={TH}>Detalle</th>
+            <th scope="col" className={TH}>Motivo</th>
+            <th scope="col" className={TH}>Estado</th>
+            <th scope="col" className={TH}><span className="sr-only">Acciones</span></th>
+          </tr>
+        </thead>
+        {children}
+      </table>
+    </div>
+  );
+}
+
 function BatchRow({ batch, onCancel }: { batch: BookingBatch; onCancel: (b: BookingBatch) => void }) {
   const isRecurring = batch.type === 'recurring_teacher';
   return (
-    <motion.div layout initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.97 }}
-      transition={{ duration: 0.25 }}
-      className="bg-white rounded-xl border-[1.5px] border-black/[0.07] shadow-sm p-4 flex flex-col sm:flex-row sm:items-center gap-4"
+    <motion.tr layout initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      transition={{ duration: 0.3, ease: EASE }}
+      className={ROW}
     >
-      <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-        {isRecurring ? <Repeat size={16} className="text-primary" /> : <Wrench size={16} className="text-primary" />}
-      </div>
-
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-1">
-          <span className="text-base font-bold text-ink truncate">{batch.space.name}</span>
-          <span className={cn('shrink-0 inline-flex items-center rounded-full px-2 py-0.5 text-2xs font-bold uppercase tracking-wide',
-            batch.status === 'active' ? 'bg-status-confirmed/10 text-status-confirmed' : 'bg-status-cancelled/10 text-status-cancelled')}>
-            {batch.status === 'active' ? 'Activo' : 'Cancelado'}
-          </span>
-        </div>
-        <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-ink-2">
-          <span className="flex items-center gap-1.5">
-            <Clock size={13} className="text-primary/50" />
-            {batch.slot?.label ?? 'Todos los turnos'}
-          </span>
-          <span className="text-2xs font-bold uppercase tracking-wide text-ink-2/60">
-            {isRecurring && batch.weekday !== undefined
-              ? `Todos los ${WEEKDAYS_LONG[batch.weekday]}s`
-              : `${batch.start_date} → ${batch.end_date}`}
-          </span>
-        </div>
-        <p className="text-sm text-ink mt-1 truncate">{batch.reason}</p>
-      </div>
-
-      {batch.status === 'active' && (
-        <button onClick={() => onCancel(batch)}
-          className="flex items-center gap-1 text-sm font-semibold text-status-cancelled hover:bg-status-cancelled/8 px-2.5 py-1.5 rounded-lg transition-all active:scale-[0.98] shrink-0 self-start sm:self-center"
-        >
-          <Ban size={14} /> Cancelar serie
-        </button>
-      )}
-    </motion.div>
+      <td className={TD}>
+        <p className="font-arch text-base font-semibold text-paper">{batch.space.name}</p>
+        <p className={cn(MONO, 'mt-1 text-concrete')}>{isRecurring ? 'Turno fijo' : 'Mantenimiento'}</p>
+      </td>
+      <td className={cn(TD, MONO, 'whitespace-nowrap text-paper')}>
+        {batch.slot?.label ?? 'Todos los turnos'}
+      </td>
+      <td className={cn(TD, MONO, 'whitespace-nowrap text-concrete')}>
+        {isRecurring && batch.weekday !== undefined
+          ? `Todos los ${WEEKDAYS_LONG[batch.weekday]}s`
+          : `${batch.start_date} → ${batch.end_date}`}
+      </td>
+      <td className={cn(TD, 'text-sm text-paper')}>{batch.reason}</td>
+      <td className={cn(TD, MONO, 'whitespace-nowrap', batch.status === 'active' ? 'text-paper' : 'text-concrete')}>
+        <span
+          aria-hidden="true"
+          className={cn('mr-2 inline-block size-1.5 align-middle', batch.status === 'active' ? 'bg-paper' : 'bg-concrete')}
+        />
+        {batch.status === 'active' ? 'Activo' : 'Cancelado'}
+      </td>
+      <td className={cn(TD, 'whitespace-nowrap text-right')}>
+        {batch.status === 'active' && (
+          <button type="button" onClick={() => onCancel(batch)} className={BTN_LINE}>
+            Cancelar serie
+          </button>
+        )}
+      </td>
+    </motion.tr>
   );
 }
 
@@ -676,46 +713,46 @@ function FixedSlotsPanel({ defaultDate }: { defaultDate: string }) {
 
   return (
     <div>
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-        <h2 className="text-2xs font-bold tracking-[0.1em] uppercase text-primary">Turnos fijos y bloqueos</h2>
-        <div className="flex gap-2">
-          <button onClick={() => setShowRecurring(true)} className="flex items-center gap-1.5 bg-primary text-white font-bold rounded-lg px-4 py-2 text-sm transition-all hover:bg-primary-dark active:scale-[0.98]">
-            <Repeat size={14} /> Turno fijo
-          </button>
-          <button onClick={() => setShowBlock(true)} className="flex items-center gap-1.5 bg-surface text-ink font-bold rounded-lg px-4 py-2 text-sm border-[1.5px] border-black/[0.07] transition-all hover:border-primary/40 active:scale-[0.98]">
-            <Wrench size={14} /> Bloqueo
-          </button>
-        </div>
+      <div className="mb-8 flex flex-wrap items-center justify-end gap-x-8 gap-y-4">
+        <button type="button" onClick={() => setShowBlock(true)} className={BTN_LINE}>
+          Bloqueo
+        </button>
+        <button type="button" onClick={() => setShowRecurring(true)} className={BTN_PRIMARY}>
+          Turno fijo
+        </button>
       </div>
 
       {isLoading ? (
-        <div className="flex flex-col gap-3">{Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-20 bg-white rounded-xl border-[1.5px] border-black/[0.07] animate-pulse" />)}</div>
+        <div aria-busy="true" aria-label="Cargando turnos fijos" className="flex flex-col gap-4">
+          {Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-16 animate-pulse bg-graphite motion-reduce:animate-none" />)}
+        </div>
       ) : !batches?.length ? (
-        <div className="flex flex-col items-center justify-center py-20 text-center">
-          <div className="w-14 h-14 rounded-xl bg-surface flex items-center justify-center mb-4">
-            <Repeat size={24} className="text-ink-2/50" />
-          </div>
-          <p className="text-base font-semibold text-ink mb-1">Sin turnos fijos ni bloqueos</p>
-          <p className="text-sm text-ink-2">Creá uno con los botones de arriba.</p>
+        <div className="max-w-md py-10">
+          <p className="font-arch font-expanded text-xl font-bold uppercase leading-tight tracking-[-0.02em] text-paper">Sin turnos fijos ni bloqueos</p>
+          <p className="mt-4 text-base leading-relaxed text-paper/85">Creá uno con los botones de arriba.</p>
         </div>
       ) : (
-        <div className="flex flex-col gap-8">
+        <div className="flex flex-col gap-16">
           {active.length > 0 && (
-            <section>
-              <h3 className="text-2xs font-bold tracking-[0.1em] uppercase text-primary mb-3">Activos ({active.length})</h3>
-              <AnimatePresence mode="popLayout">
-                <div className="flex flex-col gap-3">
-                  {active.map((b) => <BatchRow key={b.id} batch={b} onCancel={setCancelTarget} />)}
-                </div>
-              </AnimatePresence>
+            <section aria-labelledby="batches-active-title">
+              <h3 id="batches-active-title" className={cn(MONO, 'mb-4 text-paper')}>Activos ({active.length})</h3>
+              <BatchesTable>
+                <AnimatePresence mode="popLayout">
+                  <tbody>
+                    {active.map((b) => <BatchRow key={b.id} batch={b} onCancel={setCancelTarget} />)}
+                  </tbody>
+                </AnimatePresence>
+              </BatchesTable>
             </section>
           )}
           {cancelled.length > 0 && (
-            <section>
-              <h3 className="text-2xs font-bold tracking-[0.1em] uppercase text-ink-2 mb-3">Cancelados ({cancelled.length})</h3>
-              <div className="flex flex-col gap-3">
-                {cancelled.map((b) => <BatchRow key={b.id} batch={b} onCancel={setCancelTarget} />)}
-              </div>
+            <section aria-labelledby="batches-cancelled-title">
+              <h3 id="batches-cancelled-title" className={cn(MONO, 'mb-4 text-concrete')}>Cancelados ({cancelled.length})</h3>
+              <BatchesTable>
+                <tbody>
+                  {cancelled.map((b) => <BatchRow key={b.id} batch={b} onCancel={setCancelTarget} />)}
+                </tbody>
+              </BatchesTable>
             </section>
           )}
         </div>
@@ -723,31 +760,26 @@ function FixedSlotsPanel({ defaultDate }: { defaultDate: string }) {
 
       <AnimatePresence>
         {cancelTarget && (
-          <>
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={() => setCancelTarget(null)} />
-            <motion.div initial={{ opacity: 0, scale: 0.94, y: 16 }} animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.94, y: 16 }} transition={{ duration: 0.22 }}
-              className="fixed inset-x-4 bottom-6 sm:inset-auto sm:left-1/2 sm:-translate-x-1/2 sm:top-1/2 sm:-translate-y-1/2 sm:w-[400px] z-50 bg-white rounded-2xl shadow-xl p-6"
-            >
-              <h3 className="font-serif text-xl text-ink mb-1">¿Cancelar toda la serie?</h3>
-              <p className="text-sm text-ink-2 mb-6">
-                Se van a cancelar todas las ocurrencias futuras de <strong className="text-ink">{cancelTarget.space.name}</strong>
+          <ModalPortal>
+            <DialogPanel onClose={() => setCancelTarget(null)} labelledBy="cancel-batch-title">
+              <h3 id="cancel-batch-title" className={DIALOG_TITLE}>¿Cancelar toda la serie?</h3>
+              <p className="mt-6 text-base leading-relaxed text-paper/85">
+                Se van a cancelar todas las ocurrencias futuras de <strong className="font-semibold text-paper">{cancelTarget.space.name}</strong>
                 {' — '}{cancelTarget.reason}. Las que ya pasaron quedan como historial.
               </p>
-              {cancelMutation.error && <p className="text-xs text-status-cancelled mb-3">{cancelMutation.error.message}</p>}
-              <div className="flex gap-3">
-                <button onClick={() => setCancelTarget(null)} className="flex-1 bg-surface text-ink font-semibold rounded-lg py-3 text-sm transition-all hover:bg-surface-2 active:scale-[0.98]">
+              {cancelMutation.error && <p role="alert" className={cn(ERROR_TEXT, 'mt-4')}>{cancelMutation.error.message}</p>}
+              <div className="mt-8 flex flex-col-reverse gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <button type="button" onClick={() => setCancelTarget(null)} className={BTN_LINE}>
                   Volver
                 </button>
-                <button onClick={() => cancelMutation.mutate(cancelTarget.id)} disabled={cancelMutation.isPending}
-                  className="flex-1 bg-status-cancelled/10 border-[1.5px] border-status-cancelled/20 text-status-cancelled font-bold rounded-lg py-3 text-sm transition-all hover:bg-status-cancelled/18 active:scale-[0.98] disabled:opacity-60"
+                <button type="button" onClick={() => cancelMutation.mutate(cancelTarget.id)} disabled={cancelMutation.isPending}
+                  className={BTN_PRIMARY}
                 >
                   {cancelMutation.isPending ? 'Cancelando...' : 'Sí, cancelar todo'}
                 </button>
               </div>
-            </motion.div>
-          </>
+            </DialogPanel>
+          </ModalPortal>
         )}
       </AnimatePresence>
 
@@ -760,8 +792,6 @@ function FixedSlotsPanel({ defaultDate }: { defaultDate: string }) {
 }
 
 // ── Space form (must be outside SpacesPanel to avoid focus loss on re-render) ──
-const spaceInputClass = 'w-full px-3.5 py-2.5 bg-surface border-[1.5px] border-black/10 rounded-lg text-sm font-medium text-ink placeholder:text-ink-2/60 outline-none transition-all duration-normal focus:border-primary focus:ring-2 focus:ring-primary/[0.13]';
-
 function SpaceForm({ form, setForm, showNew, onCancel, onSubmit, isPending, submitLabel }: {
   form: { name: string; type: string; description: string; price_per_slot: string };
   setForm: React.Dispatch<React.SetStateAction<{ name: string; type: string; description: string; price_per_slot: string }>>;
@@ -772,10 +802,10 @@ function SpaceForm({ form, setForm, showNew, onCancel, onSubmit, isPending, subm
   submitLabel: string;
 }) {
   return (
-    <div className="flex flex-col gap-3 mt-3 p-4 bg-bg rounded-xl border border-black/[0.06]">
-      <input placeholder="Nombre" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className={spaceInputClass} />
+    <div className="mt-6 flex flex-col gap-5 border-l border-paper/15 pl-5">
+      <input aria-label="Nombre" placeholder="Nombre" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className={FIELD} />
       {showNew && (
-        <select value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))} className={spaceInputClass}>
+        <select aria-label="Tipo de espacio" value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))} className={FIELD}>
           <option value="cancha_padel">Pádel</option>
           <option value="cancha_futbol">Fútbol</option>
           <option value="cancha_padbol">Padbol</option>
@@ -783,11 +813,11 @@ function SpaceForm({ form, setForm, showNew, onCancel, onSubmit, isPending, subm
           <option value="quincho">Quincho / Salón</option>
         </select>
       )}
-      <input placeholder="Descripción (opcional)" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} className={spaceInputClass} />
-      <input type="number" placeholder="Precio por turno" value={form.price_per_slot} onChange={e => setForm(f => ({ ...f, price_per_slot: e.target.value }))} className={spaceInputClass} />
-      <div className="flex gap-2">
-        <button onClick={onCancel} className="flex-1 bg-surface text-ink font-semibold rounded-lg py-2.5 text-sm hover:bg-surface-2 active:scale-[0.98] transition-all">Cancelar</button>
-        <button onClick={onSubmit} disabled={isPending || !form.name || !form.price_per_slot} className="flex-1 bg-primary text-white font-bold rounded-lg py-2.5 text-sm hover:bg-primary-dark active:scale-[0.98] transition-all disabled:opacity-50">{isPending ? 'Guardando...' : submitLabel}</button>
+      <input aria-label="Descripción (opcional)" placeholder="Descripción (opcional)" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} className={FIELD} />
+      <input aria-label="Precio por turno" type="number" placeholder="Precio por turno" value={form.price_per_slot} onChange={e => setForm(f => ({ ...f, price_per_slot: e.target.value }))} className={FIELD} />
+      <div className="mt-2 flex flex-col-reverse gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <button type="button" onClick={onCancel} className={BTN_LINE}>Cancelar</button>
+        <button type="button" onClick={onSubmit} disabled={isPending || !form.name || !form.price_per_slot} className={BTN_PRIMARY}>{isPending ? 'Guardando...' : submitLabel}</button>
       </div>
     </div>
   );
@@ -820,37 +850,32 @@ function SpacesPanel() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-5">
-        <h2 className="text-2xs font-bold tracking-[0.1em] uppercase text-primary">Espacios</h2>
-        {!showNew && <button onClick={() => { setShowNew(true); setEditing(null); }} className="flex items-center gap-1.5 text-sm font-semibold text-primary hover:underline"><Plus size={14} /> Nuevo espacio</button>}
+      <div className="mb-8 flex items-center justify-end">
+        {!showNew && <button type="button" onClick={() => { setShowNew(true); setEditing(null); }} className={BTN_PRIMARY}>Nuevo espacio</button>}
       </div>
-      {showNew && <SpaceForm form={form} setForm={setForm} showNew={showNew} onCancel={() => { setShowNew(false); setEditing(null); }} onSubmit={() => createMutation.mutate()} isPending={createMutation.isPending} submitLabel="Crear espacio" />}
+      {showNew && <div className="mb-10"><SpaceForm form={form} setForm={setForm} showNew={showNew} onCancel={() => { setShowNew(false); setEditing(null); }} onSubmit={() => createMutation.mutate()} isPending={createMutation.isPending} submitLabel="Crear espacio" /></div>}
       {isLoading ? (
-        <div className="flex flex-col gap-3">{Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-16 bg-white rounded-xl animate-pulse" />)}</div>
+        <div aria-busy="true" aria-label="Cargando espacios" className="flex flex-col gap-4">{Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-16 animate-pulse bg-graphite motion-reduce:animate-none" />)}</div>
       ) : (
-        <div className="flex flex-col gap-3">
+        <ul>
           {spaces?.map(space => {
-            const Icon = SPACE_ICONS[space.type];
             return (
-              <div key={space.id} className="bg-white rounded-xl border-[1.5px] border-black/[0.07] shadow-sm p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0"><Icon size={16} className="text-primary" /></div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-bold text-ink truncate">{space.name}</p>
-                      <p className="text-xs text-ink-2">{SPACE_LABELS[space.type]} · <span className="font-serif">${space.price_per_slot.toLocaleString('es-AR')}</span> / turno</p>
-                    </div>
+              <li key={space.id} className="border-t border-paper/10 py-5 last:border-b">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="min-w-0">
+                    <p className="truncate font-arch text-base font-semibold text-paper">{space.name}</p>
+                    <p className={cn(MONO, 'mt-1 text-concrete')}>{SPACE_LABELS[space.type]} · <span className="text-paper">${space.price_per_slot.toLocaleString('es-AR')}</span> / turno</p>
                   </div>
-                  <div className="flex gap-1 shrink-0">
-                    <button onClick={() => { setEditing(space.id); setShowNew(false); setForm({ name: space.name, type: space.type, description: space.description ?? '', price_per_slot: String(space.price_per_slot) }); }} className="p-2 rounded-lg text-ink-2 hover:text-primary hover:bg-primary/8 transition-all active:scale-[0.98]"><Pencil size={15} /></button>
-                    <button onClick={() => deleteMutation.mutate(space.id)} className="p-2 rounded-lg text-ink-2 hover:text-status-cancelled hover:bg-status-cancelled/8 transition-all active:scale-[0.98]"><Trash2 size={15} /></button>
+                  <div className="flex shrink-0 gap-1">
+                    <button type="button" aria-label={`Editar ${space.name}`} onClick={() => { setEditing(space.id); setShowNew(false); setForm({ name: space.name, type: space.type, description: space.description ?? '', price_per_slot: String(space.price_per_slot) }); }} className="p-2.5 text-concrete outline-none transition-colors hover:text-paper focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-paper"><Pencil size={16} /></button>
+                    <button type="button" aria-label={`Eliminar ${space.name}`} onClick={() => deleteMutation.mutate(space.id)} className="p-2.5 text-concrete outline-none transition-colors hover:text-red-300 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-paper"><Trash2 size={16} /></button>
                   </div>
                 </div>
                 {editing === space.id && <SpaceForm form={form} setForm={setForm} showNew={false} onCancel={() => setEditing(null)} onSubmit={() => updateMutation.mutate(space.id)} isPending={updateMutation.isPending} submitLabel="Guardar cambios" />}
-              </div>
+              </li>
             );
           })}
-        </div>
+        </ul>
       )}
     </div>
   );
@@ -879,65 +904,59 @@ function UsersPanel() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-users'] }),
   });
 
-  const inputClass = 'w-full px-3.5 py-2.5 bg-surface border-[1.5px] border-black/10 rounded-lg text-sm font-medium text-ink placeholder:text-ink-2/60 outline-none transition-all duration-normal focus:border-primary focus:ring-2 focus:ring-primary/[0.13]';
-
   return (
     <div>
-      <div className="flex items-center justify-between mb-5">
-        <h2 className="text-2xs font-bold tracking-[0.1em] uppercase text-primary">Usuarios staff</h2>
-        {!showNew && <button onClick={() => setShowNew(true)} className="flex items-center gap-1.5 text-sm font-semibold text-primary hover:underline"><Plus size={14} /> Nuevo usuario</button>}
+      <div className="mb-8 flex items-center justify-end">
+        {!showNew && <button type="button" onClick={() => setShowNew(true)} className={BTN_PRIMARY}>Nuevo usuario</button>}
       </div>
 
       {showNew && (
-        <div className="flex flex-col gap-3 mb-5 p-4 bg-bg rounded-xl border border-black/[0.06]">
-          <input placeholder="Nombre" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className={inputClass} />
-          <input type="tel" placeholder="Teléfono" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} className={inputClass} />
-          <input type="password" placeholder="Contraseña" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} className={inputClass} />
-          <select value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value as any }))} className={inputClass}>
+        <div className="mb-10 flex flex-col gap-5 border-l border-paper/15 pl-5">
+          <input aria-label="Nombre" placeholder="Nombre" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className={FIELD} />
+          <input aria-label="Teléfono" type="tel" placeholder="Teléfono" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} className={FIELD} />
+          <input aria-label="Contraseña" type="password" placeholder="Contraseña" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} className={FIELD} />
+          <select aria-label="Rol" value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value as any }))} className={FIELD}>
             <option value="receptionist">Recepcionista</option>
             <option value="admin">Administrador</option>
           </select>
-          {createMutation.error && <p className="text-xs text-status-cancelled">{createMutation.error.message}</p>}
-          <div className="flex gap-2">
-            <button onClick={() => setShowNew(false)} className="flex-1 bg-surface text-ink font-semibold rounded-lg py-2.5 text-sm hover:bg-surface-2 active:scale-[0.98] transition-all">Cancelar</button>
-            <button onClick={() => createMutation.mutate()} disabled={createMutation.isPending || !form.name || !form.phone || !form.password} className="flex-1 bg-primary text-white font-bold rounded-lg py-2.5 text-sm hover:bg-primary-dark active:scale-[0.98] transition-all disabled:opacity-50">{createMutation.isPending ? 'Creando...' : 'Crear usuario'}</button>
+          {createMutation.error && <p role="alert" className={ERROR_TEXT}>{createMutation.error.message}</p>}
+          <div className="mt-2 flex flex-col-reverse gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <button type="button" onClick={() => setShowNew(false)} className={BTN_LINE}>Cancelar</button>
+            <button type="button" onClick={() => createMutation.mutate()} disabled={createMutation.isPending || !form.name || !form.phone || !form.password} className={BTN_PRIMARY}>{createMutation.isPending ? 'Creando...' : 'Crear usuario'}</button>
           </div>
         </div>
       )}
 
       {isLoading ? (
-        <div className="flex flex-col gap-3">{Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-14 bg-white rounded-xl animate-pulse" />)}</div>
+        <div aria-busy="true" aria-label="Cargando usuarios" className="flex flex-col gap-4">{Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-14 animate-pulse bg-graphite motion-reduce:animate-none" />)}</div>
       ) : (
-        <div className="flex flex-col gap-3">
+        <ul>
           {users?.map(user => (
-            <div key={user.id} className="bg-white rounded-xl border-[1.5px] border-black/[0.07] shadow-sm p-4 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0"><User size={15} className="text-primary" /></div>
-                <div className="min-w-0">
-                  <p className="text-sm font-bold text-ink truncate">{user.name}</p>
-                  <div className="flex items-center gap-2">
-                    <p className="text-xs text-ink-2">{user.phone}</p>
-                    <select
-                      value={user.role}
-                      onChange={(e) => roleMutation.mutate({ id: user.id, role: e.target.value })}
-                      disabled={roleMutation.isPending}
-                      className={cn(
-                        'text-2xs font-bold uppercase tracking-wide rounded-full px-2 py-0.5 border-0 outline-none cursor-pointer transition-all',
-                        user.role === 'admin'
-                          ? 'bg-status-pending/10 text-status-pending'
-                          : 'bg-primary/10 text-primary',
-                      )}
-                    >
-                      <option value="receptionist">Recepcionista</option>
-                      <option value="admin">Admin</option>
-                    </select>
-                  </div>
+            <li key={user.id} className="flex items-center justify-between gap-4 border-t border-paper/10 py-5 last:border-b">
+              <div className="min-w-0">
+                <p className="truncate font-arch text-base font-semibold text-paper">{user.name}</p>
+                <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1">
+                  <p className={cn(MONO, 'text-concrete')}>{user.phone}</p>
+                  <select
+                    aria-label={`Rol de ${user.name}`}
+                    value={user.role}
+                    onChange={(e) => roleMutation.mutate({ id: user.id, role: e.target.value })}
+                    disabled={roleMutation.isPending}
+                    className={cn(
+                      MONO,
+                      'cursor-pointer border-0 border-b border-paper/25 bg-transparent py-0.5 outline-none transition-colors [color-scheme:dark] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-paper disabled:opacity-50 [&_option]:bg-night [&_option]:text-paper',
+                      user.role === 'admin' ? 'text-light' : 'text-paper',
+                    )}
+                  >
+                    <option value="receptionist">Recepcionista</option>
+                    <option value="admin">Admin</option>
+                  </select>
                 </div>
               </div>
-              <button onClick={() => deleteMutation.mutate(user.id)} className="p-2 rounded-lg text-ink-2 hover:text-status-cancelled hover:bg-status-cancelled/8 transition-all active:scale-[0.98] shrink-0"><Trash2 size={15} /></button>
-            </div>
+              <button type="button" aria-label={`Eliminar ${user.name}`} onClick={() => deleteMutation.mutate(user.id)} className="shrink-0 p-2.5 text-concrete outline-none transition-colors hover:text-red-300 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-paper"><Trash2 size={16} /></button>
+            </li>
           ))}
-        </div>
+        </ul>
       )}
     </div>
   );
@@ -946,6 +965,7 @@ function UsersPanel() {
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function StaffPanelPage() {
   const queryClient = useQueryClient();
+  const reduce = useReducedMotion();
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
   const [tab, setTab] = useState<Tab>('bookings');
@@ -969,222 +989,265 @@ export default function StaffPanelPage() {
   const active = bookings?.filter((b) => b.status === 'pending' || b.status === 'confirmed') ?? [];
   const past   = bookings?.filter((b) => b.status === 'cancelled' || b.status === 'completed') ?? [];
 
+  const y = reduce ? 0 : 12;
+  const tabTitle = tab === 'bookings' ? 'Reservas del día' : tab === 'fixed' ? 'Turnos fijos y bloqueos' : tab === 'spaces' ? 'Canchas' : 'Usuarios';
+  const iconButtonClass =
+    'inline-flex size-10 shrink-0 items-center justify-center border border-paper/15 text-paper outline-none transition-colors hover:border-paper/40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-paper';
+
   return (
-    <div className="animate-fade-up min-h-[calc(100vh-58px)] bg-bg">
+    <div className="landing">
+      <div className="on-dark min-h-[100svh] bg-night text-paper">
+        <LandingNav solid />
 
-      {/* Header */}
-      <div className="bg-surface border-b border-black/[0.06]">
-        <div className="max-w-[1140px] mx-auto px-6 py-8">
-          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-            <div>
-              <span className="text-2xs font-bold tracking-[0.1em] uppercase text-primary mb-1.5 block">
-                {isAdmin ? 'Panel de administración' : 'Panel de recepción'}
-              </span>
-              <h1 className="font-serif text-4xl text-ink tracking-tight">
-                {tab === 'bookings' ? 'Reservas del día' : tab === 'fixed' ? 'Turnos fijos y bloqueos' : tab === 'spaces' ? 'Canchas' : 'Usuarios'}
-              </h1>
-            </div>
-            {tab === 'bookings' && (
-              <button
-                onClick={() => setShowManual(true)}
-                className="flex items-center gap-2 bg-primary text-white font-bold rounded-lg px-5 py-2.5 text-sm transition-all hover:bg-primary-dark hover:shadow-glow active:scale-[0.98] shrink-0"
+        <main className="relative pt-16 md:pt-20">
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-x-0 top-16 h-[160px] bg-gradient-to-b from-light/10 to-transparent md:top-20 md:h-[200px]"
+          />
+          <LightLine className="absolute inset-x-0 top-16 md:top-20" delay={0.3} />
+
+          <div className={cn(CONTAINER, 'relative pb-20 pt-14 md:pb-28 md:pt-20 lg:pb-32')}>
+            <SectionLabel number="H1" label="Panel" />
+
+            <h1 className="mt-10 break-words font-arch font-expanded text-[clamp(2.25rem,min(9vw,14vh),6rem)] font-extrabold uppercase leading-[0.9] tracking-[-0.02em] text-paper md:mt-14">
+              <motion.span
+                className="block"
+                initial={{ opacity: 0, y: reduce ? 0 : 28 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.7, ease: EASE, delay: 0.15 }}
               >
-                <Plus size={16} /> Nueva reserva
-              </button>
-            )}
-          </div>
+                Panel
+              </motion.span>
+            </h1>
 
-          {/* Tabs — reservas + turnos fijos para todo el staff; canchas + usuarios solo admin */}
-          <div className="flex gap-1 mt-6 bg-surface rounded-lg p-1 w-fit">
-            {([
-              { key: 'bookings', label: 'Reservas',    icon: CalendarDays },
-              { key: 'fixed',    label: 'Turnos fijos', icon: Repeat },
-              ...(isAdmin ? [
-                { key: 'spaces', label: 'Canchas',  icon: ShieldCheck },
-                { key: 'users',  label: 'Usuarios', icon: User },
-              ] as { key: Tab; label: string; icon: any }[] : []),
-            ] as { key: Tab; label: string; icon: any }[]).map(({ key, label, icon: Icon }) => (
-              <button
-                key={key}
-                onClick={() => setTab(key)}
-                className={cn(
-                  'flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-semibold transition-all duration-normal',
-                  tab === key ? 'bg-white text-ink shadow-sm' : 'text-ink-2 hover:text-ink',
+            <motion.p
+              className={cn(MONO, 'mt-6 text-concrete')}
+              initial={{ opacity: 0, y }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.7, ease: EASE, delay: 0.3 }}
+            >
+              <span className="text-paper">{isAdmin ? 'Panel de administración' : 'Panel de recepción'}</span>
+              {tab === 'bookings' && (
+                <>
+                  <span> · </span>
+                  <span className="capitalize">{formatDate(date)}</span>
+                </>
+              )}
+            </motion.p>
+
+            <motion.div
+              className="mt-14 md:mt-20"
+              initial={{ opacity: 0, y }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.7, ease: EASE, delay: 0.4 }}
+            >
+              {/* Tabs — reservas + turnos fijos para todo el staff; canchas + usuarios solo admin */}
+              <div role="group" aria-label="Secciones del panel" className="flex flex-wrap gap-x-8 gap-y-4">
+                {([
+                  { key: 'bookings', label: 'Reservas' },
+                  { key: 'fixed',    label: 'Turnos fijos' },
+                  ...(isAdmin ? [
+                    { key: 'spaces', label: 'Canchas' },
+                    { key: 'users',  label: 'Usuarios' },
+                  ] : []),
+                ] as { key: Tab; label: string }[]).map(({ key, label }) => {
+                  const selected = tab === key;
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      aria-pressed={selected}
+                      onClick={() => setTab(key)}
+                      className={cn(
+                        MONO,
+                        'relative pb-3 outline-none transition-colors duration-300 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-paper',
+                        selected ? 'text-paper' : 'text-concrete hover:text-paper',
+                      )}
+                    >
+                      {label}
+                      {selected && (
+                        <motion.span
+                          layoutId="panel-tab-led"
+                          aria-hidden="true"
+                          className="absolute inset-x-0 bottom-0 h-[2px] bg-light"
+                          transition={{ duration: reduce ? 0 : 0.35, ease: EASE }}
+                        />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="mt-12 flex flex-wrap items-end justify-between gap-x-8 gap-y-6 border-t border-paper/10 pt-8">
+                <h2 className={SECTION_TITLE}>{tabTitle}</h2>
+                {tab === 'bookings' && (
+                  <button
+                    type="button"
+                    onClick={() => setShowManual(true)}
+                    className={BTN_PRIMARY}
+                  >
+                    Nueva reserva
+                  </button>
                 )}
-              >
-                <Icon size={14} /> {label}
-              </button>
-            ))}
-          </div>
+              </div>
 
-          {/* Date nav — solo en tab reservas */}
-          {tab === 'bookings' && <div className="flex items-center gap-3 mt-6">
-            <button
-              onClick={() => setDate((d) => shiftDate(d, -1))}
-              className="w-9 h-9 rounded-lg bg-white border-[1.5px] border-black/[0.07] flex items-center justify-center text-ink-2 hover:border-primary/40 hover:text-primary transition-all active:scale-[0.98]"
-            >
-              <ChevronLeft size={17} />
-            </button>
+              {/* Date nav — solo en tab reservas */}
+              {tab === 'bookings' && <div className="mt-8 flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  aria-label="Día anterior"
+                  onClick={() => setDate((d) => shiftDate(d, -1))}
+                  className={iconButtonClass}
+                >
+                  <ArrowLeft size={16} />
+                </button>
 
-            <div className="flex items-center gap-2">
-              <CalendarDays size={15} className="text-primary/60" />
-              <input
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className="text-sm font-semibold text-ink bg-transparent outline-none cursor-pointer"
-              />
-            </div>
+                <input
+                  type="date"
+                  aria-label="Fecha"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  className={cn(MONO, 'h-10 cursor-pointer border-0 border-b border-paper/25 bg-transparent px-1 text-paper outline-none transition-colors [color-scheme:dark] focus:border-paper focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-paper')}
+                />
 
-            <button
-              onClick={() => setDate((d) => shiftDate(d, 1))}
-              className="w-9 h-9 rounded-lg bg-white border-[1.5px] border-black/[0.07] flex items-center justify-center text-ink-2 hover:border-primary/40 hover:text-primary transition-all active:scale-[0.98]"
-            >
-              <ChevronRight size={17} />
-            </button>
+                <button
+                  type="button"
+                  aria-label="Día siguiente"
+                  onClick={() => setDate((d) => shiftDate(d, 1))}
+                  className={iconButtonClass}
+                >
+                  <ArrowRight size={16} />
+                </button>
 
-            {date !== today && (
-              <button
-                onClick={() => setDate(today)}
-                className="text-sm font-semibold text-primary hover:underline ml-1"
-              >
-                Hoy
-              </button>
-            )}
-          </div>}
-        </div>
-      </div>
+                {date !== today && (
+                  <button
+                    type="button"
+                    onClick={() => setDate(today)}
+                    className={cn(BTN_LINE, 'ml-2')}
+                  >
+                    Hoy
+                  </button>
+                )}
+              </div>}
 
-      {/* Content */}
-      <div className="max-w-[1140px] mx-auto px-6 py-8">
+              {/* Content */}
+              <div className="mt-10">
 
-        {/* Admin tabs content */}
-        {tab === 'spaces' && <SpacesPanel />}
-        {tab === 'users'  && <UsersPanel />}
-        {tab === 'fixed'  && <FixedSlotsPanel defaultDate={date} />}
+                {/* Admin tabs content */}
+                {tab === 'spaces' && <SpacesPanel />}
+                {tab === 'users'  && <UsersPanel />}
+                {tab === 'fixed'  && <FixedSlotsPanel defaultDate={date} />}
 
-        {/* Bookings content */}
-        {tab === 'bookings' && <>
+                {/* Bookings content */}
+                {tab === 'bookings' && <>
 
-        {/* Summary chips */}
-        {!isLoading && bookings && bookings.length > 0 && (
-          <div className="flex flex-wrap gap-2 mb-6">
-            <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 bg-white border-[1.5px] border-black/[0.07] text-sm font-semibold text-ink">
-              {bookings.length} total
-            </span>
-            {active.length > 0 && (
-              <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 bg-status-confirmed/10 text-status-confirmed text-sm font-semibold">
-                {active.length} activas
-              </span>
-            )}
-            {past.filter(b => b.status === 'cancelled').length > 0 && (
-              <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 bg-status-cancelled/10 text-status-cancelled text-sm font-semibold">
-                {past.filter(b => b.status === 'cancelled').length} canceladas
-              </span>
-            )}
-          </div>
-        )}
+                {/* Summary line */}
+                {!isLoading && bookings && bookings.length > 0 && (
+                  <p className={cn(MONO, 'mb-8 flex flex-wrap gap-x-6 gap-y-1 text-concrete')}>
+                    <span><span className="text-paper">{String(bookings.length).padStart(2, '0')}</span> total</span>
+                    {active.length > 0 && (
+                      <span><span className="text-paper">{String(active.length).padStart(2, '0')}</span> activas</span>
+                    )}
+                    {past.filter(b => b.status === 'cancelled').length > 0 && (
+                      <span><span className="text-paper">{String(past.filter(b => b.status === 'cancelled').length).padStart(2, '0')}</span> canceladas</span>
+                    )}
+                  </p>
+                )}
 
-        {isLoading ? (
-          <div className="flex flex-col gap-3">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="h-20 bg-white rounded-xl border-[1.5px] border-black/[0.07] animate-pulse" />
-            ))}
-          </div>
-        ) : !bookings?.length ? (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.96 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="flex flex-col items-center justify-center py-20 text-center"
-          >
-            <div className="w-14 h-14 rounded-xl bg-surface flex items-center justify-center mb-4">
-              <CalendarDays size={24} className="text-ink-2/50" />
-            </div>
-            <p className="text-base font-semibold text-ink mb-1">Sin reservas</p>
-            <p className="text-sm text-ink-2">
-              No hay reservas para el{' '}
-              <span className="capitalize">{formatDate(date)}</span>.
-            </p>
-          </motion.div>
-        ) : (
-          <div className="flex flex-col gap-8">
-            {active.length > 0 && (
-              <section>
-                <h2 className="text-2xs font-bold tracking-[0.1em] uppercase text-primary mb-3">
-                  Activas ({active.length})
-                </h2>
-                <AnimatePresence mode="popLayout">
-                  <div className="flex flex-col gap-3">
-                    {active.map((b) => (
-                      <BookingRow key={b.id} booking={b} onCancel={setCancelTarget} />
+                {isLoading ? (
+                  <div aria-busy="true" aria-label="Cargando reservas" className="flex flex-col gap-4">
+                    {Array.from({ length: 4 }).map((_, i) => (
+                      <div key={i} className="h-16 animate-pulse bg-graphite motion-reduce:animate-none" />
                     ))}
                   </div>
-                </AnimatePresence>
-              </section>
-            )}
-            {past.length > 0 && (
-              <section>
-                <h2 className="text-2xs font-bold tracking-[0.1em] uppercase text-ink-2 mb-3">
-                  Historial ({past.length})
-                </h2>
-                <div className="flex flex-col gap-3">
-                  {past.map((b) => (
-                    <BookingRow key={b.id} booking={b} onCancel={setCancelTarget} />
-                  ))}
-                </div>
-              </section>
-            )}
+                ) : !bookings?.length ? (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="max-w-md py-10"
+                  >
+                    <p className="font-arch font-expanded text-xl font-bold uppercase leading-tight tracking-[-0.02em] text-paper md:text-2xl">Sin reservas</p>
+                    <p className="mt-4 text-base leading-relaxed text-paper/85">
+                      No hay reservas para el{' '}
+                      <span className="capitalize">{formatDate(date)}</span>.
+                    </p>
+                  </motion.div>
+                ) : (
+                  <div className="flex flex-col gap-16">
+                    {active.length > 0 && (
+                      <section aria-labelledby="staff-active-title">
+                        <h2 id="staff-active-title" className={cn(MONO, 'mb-4 text-paper')}>
+                          Activas ({active.length})
+                        </h2>
+                        <BookingsTable>
+                          <AnimatePresence mode="popLayout">
+                            <tbody>
+                              {active.map((b) => (
+                                <BookingRow key={b.id} booking={b} onCancel={setCancelTarget} />
+                              ))}
+                            </tbody>
+                          </AnimatePresence>
+                        </BookingsTable>
+                      </section>
+                    )}
+                    {past.length > 0 && (
+                      <section aria-labelledby="staff-past-title">
+                        <h2 id="staff-past-title" className={cn(MONO, 'mb-4 text-concrete')}>
+                          Historial ({past.length})
+                        </h2>
+                        <BookingsTable>
+                          <tbody>
+                            {past.map((b) => (
+                              <BookingRow key={b.id} booking={b} onCancel={setCancelTarget} />
+                            ))}
+                          </tbody>
+                        </BookingsTable>
+                      </section>
+                    )}
+                  </div>
+                )}
+                </>}
+              </div>
+            </motion.div>
           </div>
-        )}
-        </>}
+        </main>
       </div>
 
       {/* Cancel dialog */}
       <AnimatePresence>
         {cancelTarget && (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm"
-              onClick={() => setCancelTarget(null)}
-            />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.94, y: 16 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.94, y: 16 }}
-              transition={{ duration: 0.22 }}
-              className="fixed inset-x-4 bottom-6 sm:inset-auto sm:left-1/2 sm:-translate-x-1/2 sm:top-1/2 sm:-translate-y-1/2 sm:w-[400px] z-50 bg-white rounded-2xl shadow-xl p-6"
-            >
-              <h3 className="font-serif text-xl text-ink mb-1">¿Cancelar reserva?</h3>
-              <p className="text-sm text-ink-2 mb-6">
-                <strong className="text-ink">{cancelTarget.space.name}</strong>
+          <ModalPortal>
+            <DialogPanel onClose={() => setCancelTarget(null)} labelledBy="cancel-booking-title">
+              <h3 id="cancel-booking-title" className={DIALOG_TITLE}>¿Cancelar reserva?</h3>
+              <p className={cn(MONO, 'mt-6 text-concrete')}>
+                <span className="text-paper">{cancelTarget.space.name}</span>
                 {' · '}
                 {cancelTarget.customer.name}
                 {' · '}
                 <span className="capitalize">{formatDate(cancelTarget.booking_date)}</span>
               </p>
               {cancelMutation.error && (
-                <p className="text-xs text-status-cancelled mb-3">{cancelMutation.error.message}</p>
+                <p role="alert" className={cn(ERROR_TEXT, 'mt-4')}>{cancelMutation.error.message}</p>
               )}
-              <div className="flex gap-3">
+              <div className="mt-8 flex flex-col-reverse gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <button
+                  type="button"
                   onClick={() => setCancelTarget(null)}
-                  className="flex-1 bg-surface text-ink font-semibold rounded-lg py-3 text-sm transition-all hover:bg-surface-2 active:scale-[0.98]"
+                  className={BTN_LINE}
                 >
                   Volver
                 </button>
                 <button
+                  type="button"
                   onClick={() => cancelMutation.mutate(cancelTarget.id)}
                   disabled={cancelMutation.isPending}
-                  className="flex-1 bg-status-cancelled/10 border-[1.5px] border-status-cancelled/20 text-status-cancelled font-bold rounded-lg py-3 text-sm transition-all hover:bg-status-cancelled/18 active:scale-[0.98] disabled:opacity-60"
+                  className={BTN_PRIMARY}
                 >
                   {cancelMutation.isPending ? 'Cancelando...' : 'Sí, cancelar'}
                 </button>
               </div>
-            </motion.div>
-          </>
+            </DialogPanel>
+          </ModalPortal>
         )}
       </AnimatePresence>
 

@@ -24,7 +24,7 @@ export const PLACE_IMAGES = [
 ];
 export const PLACE_SLIDE_MS = 3500;
 
-export const PLACE_STATEMENT = 'Canchas, quinchos y un espacio pensado para que el partido no termine en la cancha';
+export const PLACE_STATEMENT = 'Un espacio pensado para que el partido no termine en la cancha';
 
 // TODO: confirm the numbers (padel courts, quinchos count).
 export const FACTS = [
@@ -72,5 +72,5 @@ export const FOOTER = {
   whatsappUrl: 'https://wa.me/5490000000000',
   whatsappLabel: 'Escribinos por WhatsApp',
   hours: ['Todos los días', '12:00 — 24:00'],
-  credit: '© 2026 H1 ESPACIO DEPORTIVO — ARQUITECTURA: GRUPO MAZZUCCO ARQUITECTOS ASOCIADOS',
+  credit: '© 2026 H1 ESPACIO DEPORTIVO',
 };

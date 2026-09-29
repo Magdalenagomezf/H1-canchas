@@ -22,6 +22,7 @@ Sistema de reservas de canchas deportivas (pádel, fútbol) y quinchos/salones. 
 - **sonner** — toasts
 - **vaul** — drawers
 - **react-day-picker** + **date-fns** — selector de fechas
+- **@fontsource-variable/archivo** + **@fontsource/jetbrains-mono** — tipografías de la landing y el login
 - **Axios** — cliente HTTP
 
 ---
@@ -203,8 +204,8 @@ Si dos requests llegan al mismo tiempo, el primero inserta y el segundo falla en
 ### Páginas
 | Ruta | Página | Estado |
 |---|---|---|
-| `/` | HomePage | ✅ Hero, grilla de espacios, "Cómo funciona", CTA |
-| `/login` | LoginPage | ✅ Login + Registro en tabs, manejo de errores |
+| `/` | HomePage | ✅ Rediseñada (ver "Diseño de landing y login"): hero con línea LED, 01 El lugar (slideshow), 02 Espacios (índice tipográfico con datos de `GET /spaces`), 03 El complejo, 04 Cómo reservar, CTA final y footer |
+| `/login` | LoginPage | ✅ Login + Registro en tabs, manejo de errores. Rediseñada con el estilo de la landing (la lógica no cambió) |
 | `/canchas` | SpacesPage | ✅ Listado con filtros por tipo |
 | `/canchas/:id` | SpaceDetailPage | ✅ Detalle, selector de fecha, grilla de slots disponibles, reserva, modal con resumen de la seña antes de ir a Mercado Pago |
 | `/mis-reservas` | MyBookingsPage | ✅ Lista de reservas (activas / historial), cancelar con dialog de confirmación |
@@ -217,11 +218,19 @@ Si dos requests llegan al mismo tiempo, el primero inserta y el segundo falla en
 - `StaffRoute` — redirige a `/login` sin sesión, o a `/` si el rol es `customer` (usado en `/panel`)
 
 ### Componentes compartidos
-- `Navbar` — con estado de auth, responsive (drawer en mobile)
+- `Navbar` — con estado de auth, responsive (drawer en mobile). Se oculta en `/` y `/login`
+- `components/landing/` — un componente por sección de la landing + `LandingNav` (nav propio de `/` y `/login`, con Mis reservas, Panel para staff y Salir)
 - `SpaceCard` + `SpaceCardSkeleton` — usado en HomePage y SpacesPage
 
 ### Hooks
 - `useAuth` — contexto global de autenticación, persiste en sessionStorage (aislamiento por tab)
+
+### Diseño de landing y login
+- Estilo inspirado en la arquitectura del complejo (Grupo Mazzucco): fondo oscuro (`night`), línea de luz cálida tipo LED como firma, señalética numerada `01/`, radius 0, sin sombras ni cajas.
+- Tokens en `@theme` de `src/index.css` con nombres nuevos (`night`, `graphite`, `concrete`, `paper`, `court`, `dusk`, `light`). Radius 0 y fuentes aplicados solo dentro de `.landing`, así el resto de las rutas no cambia.
+- Botones de la landing en azul `dusk` (variantes `court` y `line` en `button.tsx`).
+- Textos, imágenes y placeholders editables en `src/components/landing/content.ts`.
+- Gotcha: las animaciones de revelado con `clip-path` observan el marco exterior con `useInView`; un elemento 100% recortado nunca cuenta como visible y la imagen no aparece.
 
 ---
 
@@ -273,6 +282,16 @@ Decisiones tomadas con el dueño del negocio al planificar la integración de Ch
 1. **Paginación** en `GET /bookings`, `GET /admin/bookings` y `GET /spaces`.
 
 Resueltos: bloqueo de canchas por fecha (implementado como booking batches de tipo `maintenance`, no como tabla `space_blocks`) y estado de pago (`deposit_status` / `balance_status`).
+
+### Frontend (landing y login)
+1. **Fotos faltantes**: `public/images/fachada-noche.jpg` (hero) y `public/images/locales.jpg` (El complejo). Sin ellas se ven bloques oscuros.
+2. **Placeholders en `content.ts`**: número de WhatsApp (hoy falso), link de Google Maps, dirección y cantidades de `FACTS` (canchas y quinchos).
+3. **Verificar mobile** (375px y 768px) y un **login/registro de punta a punta** con el diseño nuevo.
+4. Menores de la revisión de código:
+   - Desde `/login`, los links a secciones de la home (`/#espacios`, etc.) recargan la página completa. Se podría usar `<Link>` con `hash`.
+   - `/login/` con barra final muestra los dos navs (el viejo y el nuevo). Normalizar el pathname en `App.tsx`.
+   - En el menú mobile de la landing (Sheet en portal), el foco con teclado sale con el outline verde global en vez del claro.
+   - Las tabs del login no tienen navegación con flechas del teclado (patrón ARIA tabs).
 
 ### Migraciones
 Se aplican manualmente con `psql`, en orden: `001` → `006` (`005_add_payments`, `006_add_booking_batches`).

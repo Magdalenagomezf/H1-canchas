@@ -1,6 +1,6 @@
 # H1-canchas
 
-Backend REST API en Go para la gestión de reservas de canchas deportivas (pádel, fútbol) y quinchos/salones.
+Backend REST API en Go para la gestión de reservas de canchas deportivas (pádel, fútbol, padbol, beach vóley) y quinchos/salones.
 
 ## Stack
 

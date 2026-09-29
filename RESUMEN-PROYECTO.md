@@ -1,6 +1,6 @@
 # H1-canchas — Full Stack
 
-Sistema de reservas de canchas deportivas (pádel, fútbol) y quinchos/salones. Clientes reservan turnos online; recepcionistas gestionan reservas manualmente desde el local.
+Sistema de reservas de canchas deportivas (pádel, fútbol, padbol, beach vóley) y quinchos/salones. Clientes reservan turnos online; recepcionistas gestionan reservas manualmente desde el local.
 
 ---
 
@@ -69,7 +69,7 @@ Inyección de dependencias manual en `cmd/main.go`. Las interfaces las define el
 - Login con teléfono + password. Registro público siempre crea `customer`. Staff lo crea un admin via `POST /admin/users`.
 
 ### Spaces
-- Tipos: `cancha_padel`, `cancha_futbol`, `quincho`
+- Tipos: `cancha_padel`, `cancha_futbol`, `cancha_padbol`, `cancha_beach_voley`, `quincho`
 - Se desactivan lógicamente (`is_active = false`). El borrado físico (`DELETE /admin/spaces/:id`) solo lo puede hacer un admin y **solo si el espacio no tiene ninguna reserva**; si tiene historial, únicamente se puede desactivar.
 - Solo el **admin** puede crear espacios. El recepcionista puede editarlos (nombre, descripción, precio) pero no crearlos.
 - El tipo no es editable — cambiar tipo con reservas históricas genera inconsistencias.
@@ -294,7 +294,7 @@ Resueltos: bloqueo de canchas por fecha (implementado como booking batches de ti
    - Las tabs del login no tienen navegación con flechas del teclado (patrón ARIA tabs).
 
 ### Migraciones
-Se aplican manualmente con `psql`, en orden: `001` → `006` (`005_add_payments`, `006_add_booking_batches`).
+Se aplican manualmente con `psql`, en orden: `001` → `007` (`005_add_payments`, `006_add_booking_batches`, `007_add_padbol_beach_voley_types`).
 
 ---
 

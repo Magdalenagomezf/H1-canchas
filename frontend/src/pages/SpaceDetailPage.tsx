@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Trophy, CircleDot, UtensilsCrossed, ArrowLeft, Clock, X } from 'lucide-react';
+import { Trophy, CircleDot, Goal, Volleyball, UtensilsCrossed, ArrowLeft, Clock, X } from 'lucide-react';
 import { getSpace, getSlots } from '../api/spaces';
 import { createBooking } from '../api/bookings';
 import { generatePreference } from '../api/payments';
@@ -15,6 +15,8 @@ import type { SpaceType, BookingDetail } from '../types';
 const SPACE_ICONS: Record<SpaceType, typeof Trophy> = {
   cancha_padel: Trophy,
   cancha_futbol: CircleDot,
+  cancha_padbol: Goal,
+  cancha_beach_voley: Volleyball,
   quincho: UtensilsCrossed,
 };
 
@@ -103,7 +105,7 @@ export default function SpaceDetailPage() {
     bookingMutation.mutate();
   };
 
-  const images = space ? SPACE_IMAGES[space.type] : [];
+  const images = space ? (SPACE_IMAGES[space.type] ?? []) : [];
 
   useEffect(() => {
     if (images.length <= 1) return;

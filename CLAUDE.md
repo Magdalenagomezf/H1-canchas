@@ -48,7 +48,7 @@ cd frontend && npm run dev
 cd frontend && npm run build
 ```
 
-There is no migration runner wired into the app — migrations in `backend/migrations/` must be applied manually against the PostgreSQL database (e.g. with `psql`). Run them in order (001 → 006).
+There is no migration runner wired into the app — migrations in `backend/migrations/` must be applied manually against the PostgreSQL database (e.g. with `psql`). Run them in order (001 → 007).
 
 ## Environment
 

@@ -145,6 +145,46 @@ func TestSpaceService_Create_Success(t *testing.T) {
 	}
 }
 
+func TestSpaceService_Create_HourlyTypes_GenerateSameSlotsAsPadel(t *testing.T) {
+	collectSlots := func(t *testing.T, spaceType string) []domain.SpaceSlot {
+		t.Helper()
+		var slots []domain.SpaceSlot
+		repo := &mockSpaceRepo{
+			createFn: func(_ context.Context, _ *domain.Space) (int64, error) { return 7, nil },
+			createSlotFn: func(_ context.Context, slot *domain.SpaceSlot) (int64, error) {
+				slots = append(slots, *slot)
+				return int64(len(slots)), nil
+			},
+		}
+		svc := NewSpaceService(repo)
+		if _, err := svc.Create(context.Background(), "Cancha", spaceType, nil, 1500); err != nil {
+			t.Fatalf("%s: unexpected error: %v", spaceType, err)
+		}
+		return slots
+	}
+
+	padelSlots := collectSlots(t, domain.SpaceTypePadel)
+	if len(padelSlots) != 14 {
+		t.Fatalf("padel: got %d slots, want 14", len(padelSlots))
+	}
+
+	for _, spaceType := range []string{domain.SpaceTypePadbol, domain.SpaceTypeBeachVoley} {
+		t.Run(spaceType, func(t *testing.T) {
+			got := collectSlots(t, spaceType)
+			if len(got) != len(padelSlots) {
+				t.Fatalf("got %d slots, want %d", len(got), len(padelSlots))
+			}
+			for i := range got {
+				if got[i].Label != padelSlots[i].Label ||
+					*got[i].StartTime != *padelSlots[i].StartTime ||
+					*got[i].EndTime != *padelSlots[i].EndTime {
+					t.Errorf("slot %d: got %s, want %s", i, got[i].Label, padelSlots[i].Label)
+				}
+			}
+		})
+	}
+}
+
 func TestSpaceService_Create_EmptyDescription_TreatedAsNil(t *testing.T) {
 	var captured *domain.Space
 	repo := &mockSpaceRepo{

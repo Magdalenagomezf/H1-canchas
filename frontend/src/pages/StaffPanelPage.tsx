@@ -778,6 +778,8 @@ function SpaceForm({ form, setForm, showNew, onCancel, onSubmit, isPending, subm
         <select value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))} className={spaceInputClass}>
           <option value="cancha_padel">Pádel</option>
           <option value="cancha_futbol">Fútbol</option>
+          <option value="cancha_padbol">Padbol</option>
+          <option value="cancha_beach_voley">Beach vóley</option>
           <option value="quincho">Quincho / Salón</option>
         </select>
       )}

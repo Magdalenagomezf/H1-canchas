@@ -1,4 +1,4 @@
-export type SpaceType = 'cancha_padel' | 'cancha_futbol' | 'quincho';
+export type SpaceType = 'cancha_padel' | 'cancha_futbol' | 'cancha_padbol' | 'cancha_beach_voley' | 'quincho';
 
 export interface Space {
   id: number;

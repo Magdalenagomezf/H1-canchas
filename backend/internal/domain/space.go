@@ -2,7 +2,7 @@ package domain
 
 import "time"
 
-// Space es un espacio reservable: cancha de pádel, tenis o quincho.
+// Space es un espacio reservable: cancha de pádel, fútbol, padbol, beach vóley o quincho.
 type Space struct {
 	ID           int64     `db:"id"`
 	Name         string    `db:"name"`
@@ -15,7 +15,9 @@ type Space struct {
 
 // Tipos de espacio disponibles.
 const (
-	SpaceTypePadel   = "cancha_padel"
-	SpaceTypeFutbol  = "cancha_futbol"
-	SpaceTypeQuincho = "quincho"
+	SpaceTypePadel      = "cancha_padel"
+	SpaceTypeFutbol     = "cancha_futbol"
+	SpaceTypePadbol     = "cancha_padbol"
+	SpaceTypeBeachVoley = "cancha_beach_voley"
+	SpaceTypeQuincho    = "quincho"
 )

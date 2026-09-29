@@ -39,7 +39,7 @@ type slotTemplate struct {
 
 func defaultSlotsFor(spaceType string) []slotTemplate {
 	switch spaceType {
-	case domain.SpaceTypePadel, domain.SpaceTypeFutbol:
+	case domain.SpaceTypePadel, domain.SpaceTypeFutbol, domain.SpaceTypePadbol, domain.SpaceTypeBeachVoley:
 		hours := []int{10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23}
 		slots := make([]slotTemplate, len(hours))
 		for i, h := range hours {
@@ -302,7 +302,7 @@ func (s *SpaceService) HardDelete(ctx context.Context, id int64) error {
 
 func isValidSpaceType(spaceType string) bool {
 	switch spaceType {
-	case domain.SpaceTypePadel, domain.SpaceTypeFutbol, domain.SpaceTypeQuincho:
+	case domain.SpaceTypePadel, domain.SpaceTypeFutbol, domain.SpaceTypePadbol, domain.SpaceTypeBeachVoley, domain.SpaceTypeQuincho:
 		return true
 	default:
 		return false

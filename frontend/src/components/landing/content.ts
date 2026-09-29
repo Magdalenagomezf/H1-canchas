@@ -13,7 +13,7 @@ export const IMAGES = {
 export const HERO_TITLE = ['ESPACIO', 'DEPORTIVO', 'H1'];
 // export const HERO_TITLE = ['JUGÁ', 'BAJO LA', 'LUZ'];
 
-export const HERO_SUBLINE = 'Pádel, fútbol y quinchos en Valle Viejo, Catamarca.';
+export const HERO_SUBLINE = 'Pádel, fútbol, padbol, beach vóley y quinchos en Valle Viejo, Catamarca.';
 export const HERO_HOURS = 'ABIERTO TODOS LOS DÍAS — 12:00 / 24:00';
 
 // Section 01 slideshow, rotated every PLACE_SLIDE_MS
@@ -42,7 +42,7 @@ export const COMPLEX_FEATURES = [
 ];
 
 export const STEPS = [
-  { number: '01', title: 'Elegí el espacio', text: 'Pádel, fútbol o quincho: el que mejor se adapte a tu plan.' },
+  { number: '01', title: 'Elegí el espacio', text: 'Canchas o quincho: el que mejor se adapte a tu plan.' },
   { number: '02', title: 'Elegí fecha y turno', text: 'Mirá la disponibilidad en tiempo real y tomá tu horario.' },
   { number: '03', title: 'Pagá con Mercado Pago', text: 'Señá tu turno online y recibí la confirmación al instante.' },
 ];
@@ -50,6 +50,8 @@ export const STEPS = [
 export const SPACE_TYPE_LABEL = {
   cancha_padel: 'PÁDEL',
   cancha_futbol: 'FÚTBOL',
+  cancha_padbol: 'PADBOL',
+  cancha_beach_voley: 'BEACH VÓLEY',
   quincho: 'QUINCHO',
 } as const;
 

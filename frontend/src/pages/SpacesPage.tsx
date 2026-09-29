@@ -13,6 +13,8 @@ const FILTERS: { label: string; value: Filter }[] = [
   { label: 'Todos', value: null },
   { label: 'Pádel', value: 'cancha_padel' },
   { label: 'Fútbol', value: 'cancha_futbol' },
+  { label: 'Padbol', value: 'cancha_padbol' },
+  { label: 'Beach vóley', value: 'cancha_beach_voley' },
   { label: 'Quincho', value: 'quincho' },
 ];
 

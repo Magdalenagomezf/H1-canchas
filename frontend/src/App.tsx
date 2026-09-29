@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
+import { Routes, Route, Navigate, Outlet, useLocation, matchPath } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import { useAuth } from './hooks/useAuth';
 import HomePage from './pages/HomePage';
@@ -32,13 +32,16 @@ function StaffRoute() {
 }
 
 // Routes that render their own landing-styled nav instead of the legacy Navbar.
-const LANDING_PATHS = ['/', '/login'];
+const LANDING_PATHS = ['/', '/login', '/canchas', '/canchas/:id'];
+
+const isLandingPath = (pathname: string) =>
+  LANDING_PATHS.some((path) => matchPath({ path, end: true }, pathname));
 
 export default function App() {
   const { pathname } = useLocation();
   return (
     <div className="min-h-screen bg-bg">
-      {!LANDING_PATHS.includes(pathname) && <Navbar />}
+      {!isLandingPath(pathname) && <Navbar />}
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/canchas" element={<SpacesPage />} />

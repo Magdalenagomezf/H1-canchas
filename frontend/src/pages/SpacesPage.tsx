@@ -1,97 +1,144 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { LayoutGrid } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { getSpaces } from '../api/spaces';
-import { SpaceCard, SpaceCardSkeleton } from '../components/SpaceCard';
 import type { SpaceType } from '../types';
+import { LandingFooter } from '@/components/landing/LandingFooter';
+import { LandingNav } from '@/components/landing/LandingNav';
+import { LightLine } from '@/components/landing/LightLine';
+import { SectionLabel } from '@/components/landing/SectionLabel';
+import { SpacesGrid } from '@/components/landing/SpacesGrid';
+import { SpacesIndex } from '@/components/landing/SpacesIndex';
+import { SPACE_TYPE_LABEL } from '@/components/landing/content';
+import { CONTAINER, EASE, MONO } from '@/components/landing/ui';
 import { cn } from '@/lib/utils';
 
 type Filter = SpaceType | null;
 
 const FILTERS: { label: string; value: Filter }[] = [
   { label: 'Todos', value: null },
-  { label: 'Pádel', value: 'cancha_padel' },
-  { label: 'Fútbol', value: 'cancha_futbol' },
-  { label: 'Padbol', value: 'cancha_padbol' },
-  { label: 'Beach vóley', value: 'cancha_beach_voley' },
-  { label: 'Quincho', value: 'quincho' },
+  ...(Object.keys(SPACE_TYPE_LABEL) as SpaceType[]).map((type) => ({
+    label: SPACE_TYPE_LABEL[type],
+    value: type as Filter,
+  })),
 ];
 
 export default function SpacesPage() {
+  const reduce = useReducedMotion();
   const [filter, setFilter] = useState<Filter>(null);
 
-  const { data: spaces, isLoading } = useQuery({
+  const { data: spaces, isLoading, isError } = useQuery({
     queryKey: ['spaces'],
     queryFn: getSpaces,
   });
 
-  const filtered = filter ? spaces?.filter((s) => s.type === filter) : spaces;
+  const filtered = filter ? (spaces ?? []).filter((s) => s.type === filter) : (spaces ?? []);
+  const y = reduce ? 0 : 12;
 
   return (
-    <div className="animate-fade-up min-h-[calc(100vh-58px)] bg-bg">
+    <div className="landing">
+      <div className="on-dark min-h-[100svh] bg-night text-paper">
+        <LandingNav solid />
 
-      {/* Header */}
-      <div className="bg-surface border-b border-black/[0.06]">
-        <div className="max-w-[1140px] mx-auto px-6 py-12">
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4 }}
-          >
-            <span className="text-2xs font-bold tracking-[0.1em] uppercase text-primary mb-1.5 block">
-              Disponibles ahora
-            </span>
-            <h1 className="font-serif text-4xl text-ink tracking-tight mb-6">
-              Nuestros espacios
+        <main className="relative pt-16 md:pt-20">
+          {/* Slab LED with its soft warm wash, same as the hero */}
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-x-0 top-16 h-[160px] bg-gradient-to-b from-light/10 to-transparent md:top-20 md:h-[200px]"
+          />
+          <LightLine className="absolute inset-x-0 top-16 md:top-20" delay={0.3} />
+
+          <div className={cn(CONTAINER, 'relative pb-20 pt-14 md:pb-28 md:pt-20 lg:pb-32')}>
+            <SectionLabel number="H1" label="Espacios" />
+
+            <h1 className="mt-10 font-arch font-expanded text-[clamp(2.25rem,min(9vw,14vh),7.5rem)] font-extrabold uppercase leading-[0.9] tracking-[-0.02em] text-paper md:mt-14">
+              <motion.span
+                className="block"
+                initial={{ opacity: 0, y: reduce ? 0 : 28 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.7, ease: EASE, delay: 0.15 }}
+              >
+                Espacios
+              </motion.span>
             </h1>
+            <motion.p
+              className="mt-6 max-w-md text-base leading-relaxed text-paper/85 md:text-lg"
+              initial={{ opacity: 0, y }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, ease: EASE, delay: 0.35 }}
+            >
+              Elegí dónde jugar y reservá tu turno online.
+            </motion.p>
 
-            {/* Filter chips */}
-            <div className="flex flex-wrap gap-2">
-              {FILTERS.map((f) => (
-                <button
-                  key={f.label}
-                  onClick={() => setFilter(f.value)}
-                  className={cn(
-                    'rounded-full px-4 py-1.5 text-sm font-semibold transition-all duration-normal active:scale-[0.98]',
-                    filter === f.value
-                      ? 'bg-primary text-white shadow-sm'
-                      : 'bg-white border-[1.5px] border-black/[0.07] text-ink-2 hover:border-primary/40 hover:text-ink',
-                  )}
+            <motion.div
+              className="mt-14 flex flex-col gap-6 md:mt-20 md:flex-row md:items-end md:justify-between"
+              initial={{ opacity: 0, y }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.7, ease: EASE, delay: 0.45 }}
+            >
+              <div role="group" aria-label="Filtrar por tipo" className="flex flex-wrap gap-x-8 gap-y-4">
+                {FILTERS.map((f) => {
+                  const selected = filter === f.value;
+                  return (
+                    <button
+                      key={f.label}
+                      type="button"
+                      aria-pressed={selected}
+                      onClick={() => setFilter(f.value)}
+                      className={cn(
+                        MONO,
+                        'relative pb-3 outline-none transition-colors duration-300 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-paper',
+                        selected ? 'text-paper' : 'text-concrete hover:text-paper',
+                      )}
+                    >
+                      {f.label}
+                      {selected && (
+                        <motion.span
+                          layoutId="spaces-filter-led"
+                          aria-hidden="true"
+                          className="absolute inset-x-0 bottom-0 h-[2px] bg-light"
+                          transition={{ duration: reduce ? 0 : 0.35, ease: EASE }}
+                        />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {!isLoading && !isError && (
+                <p className={cn(MONO, 'text-concrete')} aria-live="polite">
+                  <span className="text-paper">{String(filtered.length).padStart(2, '0')}</span>{' '}
+                  {filtered.length === 1 ? 'Espacio' : 'Espacios'}
+                </p>
+              )}
+            </motion.div>
+
+            <div className="mt-10 md:mt-14">
+              <AnimatePresence mode="wait" initial={false}>
+                <motion.div
+                  key={filter ?? 'all'}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: reduce ? 0.15 : 0.3, ease: EASE }}
                 >
-                  {f.label}
-                </button>
-              ))}
+                  {filter === null ? (
+                    <SpacesGrid spaces={filtered} isLoading={isLoading} isError={isError} />
+                  ) : (
+                    <SpacesIndex
+                      spaces={filtered}
+                      isLoading={isLoading}
+                      isError={isError}
+                      emptyMessage="No hay espacios de este tipo por ahora."
+                    />
+                  )}
+                </motion.div>
+              </AnimatePresence>
             </div>
-          </motion.div>
-        </div>
-      </div>
+          </div>
+        </main>
 
-      {/* Grid */}
-      <div className="max-w-[1140px] mx-auto px-6 py-10">
-        {isLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-            {Array.from({ length: 3 }).map((_, i) => <SpaceCardSkeleton key={i} />)}
-          </div>
-        ) : !filtered?.length ? (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.96 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="flex flex-col items-center justify-center py-24 text-center"
-          >
-            <div className="w-14 h-14 rounded-xl bg-surface flex items-center justify-center mb-4">
-              <LayoutGrid size={24} className="text-ink-2/50" />
-            </div>
-            <p className="text-base font-semibold text-ink mb-1">Sin resultados</p>
-            <p className="text-sm text-ink-2">No hay espacios en esta categoría por el momento.</p>
-          </motion.div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-            {filtered.map((space, i) => (
-              <SpaceCard key={space.id} space={space} index={i} />
-            ))}
-          </div>
-        )}
+        <LandingFooter />
       </div>
     </div>
   );

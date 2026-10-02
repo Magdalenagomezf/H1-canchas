@@ -15,6 +15,12 @@ var (
 	ErrPasswordRequired = errors.New("la contraseña es obligatoria")
 	ErrPasswordTooShort = errors.New("la contraseña debe tener al menos 6 caracteres")
 
+	// datos de contacto
+	ErrInvalidPhone       = errors.New("el teléfono no es válido")
+	ErrInvalidEmail       = errors.New("el email no es válido")
+	ErrEmailRequired      = errors.New("el email es obligatorio")
+	ErrEmailAlreadyExists = errors.New("el email ya está registrado")
+
 	// genéricos — cualquier service los puede usar
 	ErrNotFound     = errors.New("recurso no encontrado")
 	ErrUnauthorized = errors.New("no autorizado")

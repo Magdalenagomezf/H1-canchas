@@ -331,3 +331,16 @@ func TestAllDatesInRange(t *testing.T) {
 		t.Fatalf("got %d dates, want 5", len(dates))
 	}
 }
+
+func TestBookingBatchService_CreateRecurring_InvalidPhoneFailsBeforeCreatingBatch(t *testing.T) {
+	batchRepo := &mockBookingBatchRepo{}
+	svc := newBookingBatchSvc(batchRepo, &mockBookingRepoForBatch{}, &mockSlotLister{}, &mockBookingRepo{}, &mockSpaceRepoForBooking{})
+
+	_, _, _, err := svc.CreateRecurringTeacherBatch(context.Background(), 1, 1, 1, 1, "Prof", "abc", daysFromNow(1), daysFromNow(30), "")
+	if !errors.Is(err, ErrInvalidPhone) {
+		t.Errorf("got %v, want ErrInvalidPhone", err)
+	}
+	if batchRepo.createCalls != 0 {
+		t.Errorf("batch Create called %d times, want 0", batchRepo.createCalls)
+	}
+}

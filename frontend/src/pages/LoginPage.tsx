@@ -119,6 +119,7 @@ export default function LoginPage() {
 
   const [regName, setRegName] = useState('');
   const [regPhone, setRegPhone] = useState('');
+  const [regEmail, setRegEmail] = useState('');
   const [regPassword, setRegPassword] = useState('');
   const [showRegPass, setShowRegPass] = useState(false);
 
@@ -131,7 +132,7 @@ export default function LoginPage() {
   });
 
   const registerMutation = useMutation({
-    mutationFn: () => register(regName, regPhone, regPassword),
+    mutationFn: () => register(regName, regPhone, regPassword, regEmail),
     onSuccess: ({ user, token }) => {
       setAuth(user, token);
       navigate(redirectTo, { replace: true, state: pendingBooking ? { pendingBooking } : undefined });
@@ -292,6 +293,17 @@ export default function LoginPage() {
                           autoComplete="tel"
                           value={regPhone}
                           onChange={(e) => setRegPhone(e.target.value)}
+                          required
+                          className={inputClass}
+                        />
+                      </Field>
+                      <Field id="reg-email" label="Email">
+                        <input
+                          id="reg-email"
+                          type="email"
+                          autoComplete="email"
+                          value={regEmail}
+                          onChange={(e) => setRegEmail(e.target.value)}
                           required
                           className={inputClass}
                         />

@@ -41,6 +41,10 @@ docker-compose up -d
 # Stop the database
 docker-compose down
 
+# Normalize existing phone numbers to E.164 (dry run; add --apply to write).
+# Required right after deploying the phase-1 backend, see RESUMEN-PROYECTO.md.
+cd backend && go run ./cmd/normalize-phones
+
 # Frontend dev server
 cd frontend && npm run dev
 
@@ -48,7 +52,7 @@ cd frontend && npm run dev
 cd frontend && npm run build
 ```
 
-There is no migration runner wired into the app — migrations in `backend/migrations/` must be applied manually against the PostgreSQL database (e.g. with `psql`). Run them in order (001 → 007).
+There is no migration runner wired into the app — migrations in `backend/migrations/` must be applied manually against the PostgreSQL database (e.g. with `psql`). Run them in order (001 → 008).
 
 ## Environment
 

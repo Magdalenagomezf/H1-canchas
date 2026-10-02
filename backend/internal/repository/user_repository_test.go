@@ -2,6 +2,7 @@ package repository_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"H1-canchas/internal/domain"
@@ -99,5 +100,78 @@ func TestUserRepo_FindByID_Found(t *testing.T) {
 	}
 	if got.Role != domain.RoleReceptionist {
 		t.Errorf("got role %q, want %q", got.Role, domain.RoleReceptionist)
+	}
+}
+
+func TestUserRepo_FindByEmail_NotFound(t *testing.T) {
+	truncateAll(t)
+	repo := repository.NewUserRepository(testDB)
+
+	got, err := repo.FindByEmail(context.Background(), "nobody@example.com")
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != nil {
+		t.Errorf("expected nil, got %+v", got)
+	}
+}
+
+func TestUserRepo_FindByEmail_IsCaseInsensitive(t *testing.T) {
+	truncateAll(t)
+	repo := repository.NewUserRepository(testDB)
+
+	email := "ana@example.com"
+	id, err := repo.Create(context.Background(), &domain.User{
+		Name: "Ana", Email: &email, Phone: "+5493834123456", PasswordHash: "hash", Role: domain.RoleCustomer,
+	})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
+	got, err := repo.FindByEmail(context.Background(), "ANA@Example.com")
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got == nil || got.ID != id {
+		t.Fatalf("expected user %d, got %+v", id, got)
+	}
+}
+
+func TestUserRepo_Create_RejectsEmailDifferingOnlyByCase(t *testing.T) {
+	truncateAll(t)
+	repo := repository.NewUserRepository(testDB)
+
+	lower, upper := "ana@example.com", "ANA@example.com"
+	if _, err := repo.Create(context.Background(), &domain.User{
+		Name: "Ana", Email: &lower, Phone: "+5493834123456", PasswordHash: "hash", Role: domain.RoleCustomer,
+	}); err != nil {
+		t.Fatalf("first create: %v", err)
+	}
+
+	_, err := repo.Create(context.Background(), &domain.User{
+		Name: "Ana 2", Email: &upper, Phone: "+5493834123457", PasswordHash: "hash", Role: domain.RoleCustomer,
+	})
+	if !errors.Is(err, domain.ErrDuplicateEmail) {
+		t.Fatalf("got %v, want domain.ErrDuplicateEmail", err)
+	}
+}
+
+func TestUserRepo_Create_RejectsDuplicatePhone(t *testing.T) {
+	truncateAll(t)
+	repo := repository.NewUserRepository(testDB)
+
+	if _, err := repo.Create(context.Background(), &domain.User{
+		Name: "Ana", Phone: "+5493834123456", PasswordHash: "hash", Role: domain.RoleCustomer,
+	}); err != nil {
+		t.Fatalf("first create: %v", err)
+	}
+
+	_, err := repo.Create(context.Background(), &domain.User{
+		Name: "Ana 2", Phone: "+5493834123456", PasswordHash: "hash", Role: domain.RoleCustomer,
+	})
+	if !errors.Is(err, domain.ErrDuplicatePhone) {
+		t.Fatalf("got %v, want domain.ErrDuplicatePhone", err)
 	}
 }

@@ -9,6 +9,7 @@ import (
 
 	"H1-canchas/internal/domain"
 	"H1-canchas/pkg/database"
+	"H1-canchas/pkg/phone"
 )
 
 // BookingRepo es la interfaz que el service necesita.
@@ -129,6 +130,7 @@ func (s *BookingService) Create(ctx context.Context, customerUserID int64, space
 
 // CreateManual crea una reserva manual hecha por el recepcionista.
 // El cliente puede no tener usuario, solo nombre y teléfono.
+// El teléfono se guarda normalizado (E.164).
 func (s *BookingService) CreateManual(ctx context.Context, createdBy int64, spaceID, slotID int64, date time.Time, customerName, customerPhone string) (*domain.Booking, error) {
 	customerName = strings.TrimSpace(customerName)
 	customerPhone = strings.TrimSpace(customerPhone)
@@ -140,6 +142,18 @@ func (s *BookingService) CreateManual(ctx context.Context, createdBy int64, spac
 		return nil, ErrPhoneRequired
 	}
 
+	normalizedPhone, err := phone.Normalize(customerPhone)
+	if err != nil {
+		return nil, ErrInvalidPhone
+	}
+
+	return s.createManual(ctx, createdBy, spaceID, slotID, date, customerName, normalizedPhone)
+}
+
+// createManual inserta la reserva manual. Espera nombre y teléfono ya
+// validados: el teléfono llega normalizado, o es el placeholder "-" de los
+// bloqueos de mantenimiento, que no tienen un cliente real.
+func (s *BookingService) createManual(ctx context.Context, createdBy int64, spaceID, slotID int64, date time.Time, customerName, customerPhone string) (*domain.Booking, error) {
 	if date.Before(argToday()) {
 		return nil, ErrInvalidBookingDate
 	}

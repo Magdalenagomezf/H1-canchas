@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -32,7 +33,7 @@ func (m *mockUserService) Register(ctx context.Context, name, phone, password st
 	if m.registerFn != nil {
 		return m.registerFn(ctx, name, phone, password, email)
 	}
-	return &domain.User{ID: 1, Name: name, Phone: phone, Role: domain.RoleCustomer}, "tok", nil
+	return &domain.User{ID: 1, Name: name, Phone: phone, Email: email, Role: domain.RoleCustomer}, "tok", nil
 }
 
 func (m *mockUserService) CreateStaff(ctx context.Context, name, phone, password, role string, email *string) (int64, error) {
@@ -97,7 +98,7 @@ func TestAuthController_Register_PhoneConflict(t *testing.T) {
 		},
 	}
 	r := newAuthRouter(svc)
-	body, _ := json.Marshal(map[string]string{"name": "Juan", "phone": "123", "password": "secret1"})
+	body, _ := json.Marshal(map[string]string{"name": "Juan", "phone": "123", "password": "secret1", "email": "juan@example.com"})
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/auth/register", bytes.NewReader(body)))
 	if w.Code != http.StatusConflict {
@@ -108,11 +109,12 @@ func TestAuthController_Register_PhoneConflict(t *testing.T) {
 func TestAuthController_Register_Success(t *testing.T) {
 	svc := &mockUserService{
 		registerFn: func(_ context.Context, _, _, _ string, _ *string) (*domain.User, string, error) {
-			return &domain.User{ID: 5, Name: "Juan", Phone: "123", Role: domain.RoleCustomer}, "jwt-token", nil
+			email := "juan@example.com"
+			return &domain.User{ID: 5, Name: "Juan", Phone: "123", Email: &email, Role: domain.RoleCustomer}, "jwt-token", nil
 		},
 	}
 	r := newAuthRouter(svc)
-	body, _ := json.Marshal(map[string]string{"name": "Juan", "phone": "123", "password": "secret1"})
+	body, _ := json.Marshal(map[string]string{"name": "Juan", "phone": "123", "password": "secret1", "email": "juan@example.com"})
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/auth/register", bytes.NewReader(body)))
 	if w.Code != http.StatusCreated {
@@ -122,6 +124,55 @@ func TestAuthController_Register_Success(t *testing.T) {
 	json.Unmarshal(w.Body.Bytes(), &resp)
 	if resp["token"] != "jwt-token" {
 		t.Errorf("expected token in response, got %v", resp)
+	}
+	user, _ := resp["user"].(map[string]any)
+	if user["email"] != "juan@example.com" {
+		t.Errorf("expected email in user response, got %v", user)
+	}
+}
+
+func TestAuthController_Register_MissingEmail(t *testing.T) {
+	r := newAuthRouter(&mockUserService{})
+	body, _ := json.Marshal(map[string]string{"name": "Juan", "phone": "123", "password": "secret1"})
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/auth/register", bytes.NewReader(body)))
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("got %d, want 400", w.Code)
+	}
+}
+
+func TestAuthController_Register_ErrorStatus(t *testing.T) {
+	cases := []struct {
+		err  error
+		want int
+	}{
+		{service.ErrNameRequired, http.StatusBadRequest},
+		{service.ErrPhoneRequired, http.StatusBadRequest},
+		{service.ErrPasswordRequired, http.StatusBadRequest},
+		{service.ErrPasswordTooShort, http.StatusBadRequest},
+		{service.ErrEmailRequired, http.StatusBadRequest},
+		{service.ErrInvalidEmail, http.StatusBadRequest},
+		{service.ErrInvalidPhone, http.StatusBadRequest},
+		{service.ErrPhoneAlreadyExists, http.StatusConflict},
+		{service.ErrEmailAlreadyExists, http.StatusConflict},
+		{errors.New("boom"), http.StatusInternalServerError},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.err.Error(), func(t *testing.T) {
+			svc := &mockUserService{
+				registerFn: func(_ context.Context, _, _, _ string, _ *string) (*domain.User, string, error) {
+					return nil, "", tc.err
+				},
+			}
+			r := newAuthRouter(svc)
+			body, _ := json.Marshal(map[string]string{"name": "Juan", "phone": "123", "password": "secret1", "email": "juan@example.com"})
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/auth/register", bytes.NewReader(body)))
+			if w.Code != tc.want {
+				t.Errorf("got %d, want %d", w.Code, tc.want)
+			}
+		})
 	}
 }
 

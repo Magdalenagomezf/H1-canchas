@@ -15,6 +15,7 @@ import (
 type mockUserRepo struct {
 	createFn       func(ctx context.Context, user *domain.User) (int64, error)
 	findByPhoneFn  func(ctx context.Context, phone string) (*domain.User, error)
+	findByEmailFn  func(ctx context.Context, email string) (*domain.User, error)
 	findByIDFn     func(ctx context.Context, id int64) (*domain.User, error)
 	getAllFn        func(ctx context.Context) ([]domain.User, error)
 	updateRoleFn   func(ctx context.Context, id int64, role string) error
@@ -32,6 +33,13 @@ func (m *mockUserRepo) Create(ctx context.Context, user *domain.User) (int64, er
 func (m *mockUserRepo) FindByPhone(ctx context.Context, phone string) (*domain.User, error) {
 	if m.findByPhoneFn != nil {
 		return m.findByPhoneFn(ctx, phone)
+	}
+	return nil, nil
+}
+
+func (m *mockUserRepo) FindByEmail(ctx context.Context, email string) (*domain.User, error) {
+	if m.findByEmailFn != nil {
+		return m.findByEmailFn(ctx, email)
 	}
 	return nil, nil
 }
@@ -97,7 +105,7 @@ func TestUserService_Register_Validations(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, _, err := svc.Register(context.Background(), tc.userName, tc.phone, tc.password, nil)
+			_, _, err := svc.Register(context.Background(), tc.userName, tc.phone, tc.password, ptr("juan@example.com"))
 			if !errors.Is(err, tc.wantErr) {
 				t.Errorf("got %v, want %v", err, tc.wantErr)
 			}
@@ -113,7 +121,7 @@ func TestUserService_Register_PhoneAlreadyExists(t *testing.T) {
 	}
 	svc := newUserSvc(repo)
 
-	_, _, err := svc.Register(context.Background(), "Juan", "1122334455", "password1", nil)
+	_, _, err := svc.Register(context.Background(), "Juan", "1122334455", "password1", ptr("juan@example.com"))
 	if !errors.Is(err, ErrPhoneAlreadyExists) {
 		t.Errorf("got %v, want ErrPhoneAlreadyExists", err)
 	}
@@ -128,7 +136,7 @@ func TestUserService_Register_RepoFindError(t *testing.T) {
 	}
 	svc := newUserSvc(repo)
 
-	_, _, err := svc.Register(context.Background(), "Juan", "1122334455", "password1", nil)
+	_, _, err := svc.Register(context.Background(), "Juan", "1122334455", "password1", ptr("juan@example.com"))
 	if !errors.Is(err, dbErr) {
 		t.Errorf("got %v, want wrapped dbErr", err)
 	}
@@ -148,7 +156,7 @@ func TestUserService_Register_HappyPath(t *testing.T) {
 	}
 	svc := newUserSvc(repo)
 
-	user, token, err := svc.Register(context.Background(), "  Juan  ", "1122334455", "password1", nil)
+	user, token, err := svc.Register(context.Background(), "  Juan  ", "1122334455", "password1", ptr("juan@example.com"))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -234,7 +242,7 @@ func TestUserService_CreateStaff_HappyPath(t *testing.T) {
 			}
 			svc := newUserSvc(repo)
 
-			id, err := svc.CreateStaff(context.Background(), "Ana", "9988776655", "password1", tc.role, nil)
+			id, err := svc.CreateStaff(context.Background(), "Ana", "3834123456", "password1", tc.role, nil)
 			if err != nil {
 				t.Fatalf("role %s: unexpected error: %v", tc.role, err)
 			}
@@ -334,5 +342,267 @@ func TestUserService_Login_HappyPath(t *testing.T) {
 	}
 	if strings.Contains(token, password) {
 		t.Error("token must not contain plain password")
+	}
+}
+
+// --- Contact data normalization ---
+
+func TestUserService_Register_StoresNormalizedContact(t *testing.T) {
+	var stored *domain.User
+	repo := &mockUserRepo{
+		createFn: func(_ context.Context, u *domain.User) (int64, error) {
+			stored = u
+			return 1, nil
+		},
+	}
+	svc := newUserSvc(repo)
+
+	_, _, err := svc.Register(context.Background(), "Juan", "0383 15-412-3456", "password1", ptr("  Juan.Perez@Example.COM "))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if stored.Email == nil || *stored.Email != "juan.perez@example.com" {
+		t.Errorf("got email %v, want juan.perez@example.com", stored.Email)
+	}
+	if stored.Phone != "+5493834123456" {
+		t.Errorf("got phone %q, want +5493834123456", stored.Phone)
+	}
+}
+
+func TestUserService_Register_ChecksNormalizedValuesForDuplicates(t *testing.T) {
+	var gotPhone, gotEmail string
+	repo := &mockUserRepo{
+		findByPhoneFn: func(_ context.Context, phone string) (*domain.User, error) {
+			gotPhone = phone
+			return nil, nil
+		},
+		findByEmailFn: func(_ context.Context, email string) (*domain.User, error) {
+			gotEmail = email
+			return nil, nil
+		},
+	}
+	svc := newUserSvc(repo)
+
+	if _, _, err := svc.Register(context.Background(), "Juan", "3834123456", "password1", ptr("A@B.com")); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if gotPhone != "+5493834123456" {
+		t.Errorf("FindByPhone got %q, want E.164 value", gotPhone)
+	}
+	if gotEmail != "a@b.com" {
+		t.Errorf("FindByEmail got %q, want lowercase value", gotEmail)
+	}
+}
+
+func TestUserService_Register_EmailAlreadyExists(t *testing.T) {
+	// The stored email is lowercase; the second attempt uses another casing.
+	repo := &mockUserRepo{
+		findByEmailFn: func(_ context.Context, email string) (*domain.User, error) {
+			if email == "juan@example.com" {
+				return &domain.User{ID: 1}, nil
+			}
+			return nil, nil
+		},
+	}
+	svc := newUserSvc(repo)
+
+	_, _, err := svc.Register(context.Background(), "Juan", "1122334455", "password1", ptr("JUAN@Example.com"))
+	if !errors.Is(err, ErrEmailAlreadyExists) {
+		t.Errorf("got %v, want ErrEmailAlreadyExists", err)
+	}
+}
+
+func TestUserService_Register_ContactValidations(t *testing.T) {
+	svc := newUserSvc(&mockUserRepo{})
+
+	cases := []struct {
+		name    string
+		phone   string
+		email   *string
+		wantErr error
+	}{
+		{"nil email", "1122334455", nil, ErrEmailRequired},
+		{"empty email", "1122334455", ptr(""), ErrEmailRequired},
+		{"whitespace email", "1122334455", ptr("   "), ErrEmailRequired},
+		{"email without domain", "1122334455", ptr("juan"), ErrInvalidEmail},
+		{"email with display name", "1122334455", ptr("Juan <juan@example.com>"), ErrInvalidEmail},
+		{"invalid phone", "abc", ptr("juan@example.com"), ErrInvalidPhone},
+		{"too short phone", "123", ptr("juan@example.com"), ErrInvalidPhone},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, _, err := svc.Register(context.Background(), "Juan", tc.phone, "password1", tc.email)
+			if !errors.Is(err, tc.wantErr) {
+				t.Errorf("got %v, want %v", err, tc.wantErr)
+			}
+		})
+	}
+}
+
+func TestUserService_Register_EmailRepoError(t *testing.T) {
+	dbErr := errors.New("db timeout")
+	repo := &mockUserRepo{
+		findByEmailFn: func(_ context.Context, _ string) (*domain.User, error) { return nil, dbErr },
+	}
+	svc := newUserSvc(repo)
+
+	_, _, err := svc.Register(context.Background(), "Juan", "1122334455", "password1", ptr("juan@example.com"))
+	if !errors.Is(err, dbErr) {
+		t.Errorf("got %v, want wrapped dbErr", err)
+	}
+}
+
+func TestUserService_CreateStaff_EmailOptionalButNormalized(t *testing.T) {
+	var stored *domain.User
+	repo := &mockUserRepo{
+		createFn: func(_ context.Context, u *domain.User) (int64, error) {
+			stored = u
+			return 3, nil
+		},
+	}
+	svc := newUserSvc(repo)
+
+	if _, err := svc.CreateStaff(context.Background(), "Ana", "1122334455", "password1", domain.RoleReceptionist, nil); err != nil {
+		t.Fatalf("without email: unexpected error: %v", err)
+	}
+	if stored.Email != nil {
+		t.Errorf("without email: got %v, want nil", *stored.Email)
+	}
+
+	if _, err := svc.CreateStaff(context.Background(), "Ana", "1122334455", "password1", domain.RoleReceptionist, ptr("   ")); err != nil {
+		t.Fatalf("blank email: unexpected error: %v", err)
+	}
+	if stored.Email != nil {
+		t.Errorf("blank email: got %v, want nil", *stored.Email)
+	}
+
+	if _, err := svc.CreateStaff(context.Background(), "Ana", "011 15 2233-4455", "password1", domain.RoleAdmin, ptr("ANA@Example.com")); err != nil {
+		t.Fatalf("with email: unexpected error: %v", err)
+	}
+	if stored.Email == nil || *stored.Email != "ana@example.com" {
+		t.Errorf("got email %v, want ana@example.com", stored.Email)
+	}
+	if stored.Phone != "+5491122334455" {
+		t.Errorf("got phone %q, want +5491122334455", stored.Phone)
+	}
+}
+
+func TestUserService_CreateStaff_ContactErrors(t *testing.T) {
+	repo := &mockUserRepo{
+		findByEmailFn: func(_ context.Context, email string) (*domain.User, error) {
+			if email == "taken@example.com" {
+				return &domain.User{ID: 1}, nil
+			}
+			return nil, nil
+		},
+	}
+	svc := newUserSvc(repo)
+
+	cases := []struct {
+		name    string
+		phone   string
+		email   *string
+		wantErr error
+	}{
+		{"invalid email", "1122334455", ptr("nope"), ErrInvalidEmail},
+		{"invalid phone", "abc", nil, ErrInvalidPhone},
+		{"email taken", "1122334455", ptr("Taken@Example.com"), ErrEmailAlreadyExists},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := svc.CreateStaff(context.Background(), "Ana", tc.phone, "password1", domain.RoleReceptionist, tc.email)
+			if !errors.Is(err, tc.wantErr) {
+				t.Errorf("got %v, want %v", err, tc.wantErr)
+			}
+		})
+	}
+}
+
+func TestUserService_Login_NormalizesPhone(t *testing.T) {
+	const password = "secret123"
+	hash, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.MinCost)
+
+	formats := []string{"3834123456", "0383 15-412-3456", "+54 9 383 412 3456"}
+	for _, input := range formats {
+		t.Run(input, func(t *testing.T) {
+			var lookedUp string
+			repo := &mockUserRepo{
+				findByPhoneFn: func(_ context.Context, phone string) (*domain.User, error) {
+					lookedUp = phone
+					return &domain.User{ID: 7, IsActive: true, PasswordHash: string(hash)}, nil
+				},
+			}
+			svc := newUserSvc(repo)
+
+			if _, _, err := svc.Login(context.Background(), input, password); err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if lookedUp != "+5493834123456" {
+				t.Errorf("FindByPhone got %q, want +5493834123456", lookedUp)
+			}
+		})
+	}
+}
+
+func TestUserService_Login_GarbagePhone(t *testing.T) {
+	repo := &mockUserRepo{
+		findByPhoneFn: func(_ context.Context, _ string) (*domain.User, error) {
+			t.Error("FindByPhone must not be called for an invalid phone")
+			return nil, nil
+		},
+	}
+	svc := newUserSvc(repo)
+
+	_, _, err := svc.Login(context.Background(), "abc", "password1")
+	if !errors.Is(err, ErrInvalidCredentials) {
+		t.Errorf("got %v, want ErrInvalidCredentials", err)
+	}
+}
+
+func TestUserService_Register_MapsRepoDuplicateErrors(t *testing.T) {
+	tests := []struct {
+		name    string
+		repoErr error
+		want    error
+	}{
+		{"duplicate email from unique index", domain.ErrDuplicateEmail, ErrEmailAlreadyExists},
+		{"duplicate phone from unique index", domain.ErrDuplicatePhone, ErrPhoneAlreadyExists},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := newUserSvc(&mockUserRepo{
+				createFn: func(_ context.Context, _ *domain.User) (int64, error) { return 0, tt.repoErr },
+			})
+
+			_, _, err := svc.Register(context.Background(), "Juan", "1122334455", "password1", ptr("juan@example.com"))
+			if !errors.Is(err, tt.want) {
+				t.Errorf("got %v, want %v", err, tt.want)
+			}
+		})
+	}
+}
+
+func TestUserService_CreateStaff_MapsRepoDuplicateErrors(t *testing.T) {
+	tests := []struct {
+		name    string
+		repoErr error
+		want    error
+	}{
+		{"duplicate email from unique index", domain.ErrDuplicateEmail, ErrEmailAlreadyExists},
+		{"duplicate phone from unique index", domain.ErrDuplicatePhone, ErrPhoneAlreadyExists},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := newUserSvc(&mockUserRepo{
+				createFn: func(_ context.Context, _ *domain.User) (int64, error) { return 0, tt.repoErr },
+			})
+
+			_, err := svc.CreateStaff(context.Background(), "Staff", "1122334455", "password1", domain.RoleReceptionist, ptr("staff@example.com"))
+			if !errors.Is(err, tt.want) {
+				t.Errorf("got %v, want %v", err, tt.want)
+			}
+		})
 	}
 }

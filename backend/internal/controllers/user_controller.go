@@ -33,6 +33,26 @@ func NewAuthController(userService userServiceI) *AuthController {
 	return &AuthController{userService: userService}
 }
 
+// userInputErrorStatus maps user-input domain errors (validation and
+// uniqueness) to their HTTP status. ok is false for anything else.
+func userInputErrorStatus(err error) (status int, ok bool) {
+	switch {
+	case errors.Is(err, service.ErrInvalidRole),
+		errors.Is(err, service.ErrNameRequired),
+		errors.Is(err, service.ErrPhoneRequired),
+		errors.Is(err, service.ErrInvalidPhone),
+		errors.Is(err, service.ErrPasswordRequired),
+		errors.Is(err, service.ErrPasswordTooShort),
+		errors.Is(err, service.ErrEmailRequired),
+		errors.Is(err, service.ErrInvalidEmail):
+		return http.StatusBadRequest, true
+	case errors.Is(err, service.ErrPhoneAlreadyExists),
+		errors.Is(err, service.ErrEmailAlreadyExists):
+		return http.StatusConflict, true
+	}
+	return 0, false
+}
+
 // Register godoc
 // POST /auth/register
 func (h *AuthController) Register(c *gin.Context) {
@@ -49,18 +69,18 @@ func (h *AuthController) Register(c *gin.Context) {
 
 	user, token, err := h.userService.Register(c.Request.Context(), req.Name, req.Phone, req.Password, email)
 	if err != nil {
-		log.Printf("Register error: %v", err)
-		if errors.Is(err, service.ErrPhoneAlreadyExists) {
-			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		if status, ok := userInputErrorStatus(err); ok {
+			c.JSON(status, gin.H{"error": err.Error()})
 			return
 		}
+		log.Printf("Register error: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "error interno"})
 		return
 	}
 
 	c.JSON(http.StatusCreated, dto.AuthResponse{
 		Token: token,
-		User:  dto.UserResponse{ID: user.ID, Name: user.Name, Phone: user.Phone, Role: user.Role},
+		User:  dto.NewUserResponse(user),
 	})
 }
 
@@ -80,19 +100,12 @@ func (h *AuthController) CreateStaff(c *gin.Context) {
 
 	id, err := h.userService.CreateStaff(c.Request.Context(), req.Name, req.Phone, req.Password, req.Role, email)
 	if err != nil {
-		switch {
-		case errors.Is(err, service.ErrInvalidRole),
-			errors.Is(err, service.ErrNameRequired),
-			errors.Is(err, service.ErrPhoneRequired),
-			errors.Is(err, service.ErrPasswordRequired),
-			errors.Is(err, service.ErrPasswordTooShort):
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		case errors.Is(err, service.ErrPhoneAlreadyExists):
-			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
-		default:
-			log.Printf("CreateStaff error: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "error interno"})
+		if status, ok := userInputErrorStatus(err); ok {
+			c.JSON(status, gin.H{"error": err.Error()})
+			return
 		}
+		log.Printf("CreateStaff error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "error interno"})
 		return
 	}
 
@@ -110,7 +123,7 @@ func (h *AuthController) ListUsers(c *gin.Context) {
 
 	resp := make([]dto.UserResponse, len(users))
 	for i, u := range users {
-		resp[i] = dto.UserResponse{ID: u.ID, Name: u.Name, Phone: u.Phone, Role: u.Role}
+		resp[i] = dto.NewUserResponse(&u)
 	}
 	c.JSON(http.StatusOK, resp)
 }
@@ -195,6 +208,6 @@ func (h *AuthController) Login(c *gin.Context) {
 
 	c.JSON(http.StatusOK, dto.AuthResponse{
 		Token: token,
-		User:  dto.UserResponse{ID: user.ID, Name: user.Name, Phone: user.Phone, Role: user.Role},
+		User:  dto.NewUserResponse(user),
 	})
 }

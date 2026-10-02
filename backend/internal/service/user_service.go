@@ -4,10 +4,12 @@ package service
 import (
 	"H1-canchas/internal/domain"
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
 	jwtutil "H1-canchas/pkg"
+	"H1-canchas/pkg/phone"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -17,6 +19,7 @@ import (
 type UserRepo interface {
 	Create(ctx context.Context, user *domain.User) (int64, error)
 	FindByPhone(ctx context.Context, phone string) (*domain.User, error)
+	FindByEmail(ctx context.Context, email string) (*domain.User, error)
 	FindByID(ctx context.Context, id int64) (*domain.User, error)
 	GetAll(ctx context.Context) ([]domain.User, error)
 	UpdateRole(ctx context.Context, id int64, role string) error
@@ -36,20 +39,51 @@ func NewUserService(repo UserRepo, jwtSecret string) *UserService {
 	}
 }
 
+// normalizeOptionalEmail applies normalizeEmail to an optional pointer input.
+func normalizeOptionalEmail(email *string) (*string, error) {
+	if email == nil {
+		return nil, nil
+	}
+	return normalizeEmail(*email)
+}
+
+// checkContactAvailable normalizes rawPhone (E.164) and verifies that neither
+// the phone nor the email (when not nil) belong to another user. It returns
+// the normalized phone. Domain errors are returned unwrapped so controllers
+// can show them as-is; infrastructure errors are wrapped with op.
+func (s *UserService) checkContactAvailable(ctx context.Context, op, rawPhone string, email *string) (string, error) {
+	normalizedPhone, err := phone.Normalize(rawPhone)
+	if err != nil {
+		return "", ErrInvalidPhone
+	}
+
+	byPhone, err := s.repo.FindByPhone(ctx, normalizedPhone)
+	if err != nil {
+		return "", fmt.Errorf("%s: %w", op, err)
+	}
+	if byPhone != nil {
+		return "", ErrPhoneAlreadyExists
+	}
+
+	if email != nil {
+		byEmail, err := s.repo.FindByEmail(ctx, *email)
+		if err != nil {
+			return "", fmt.Errorf("%s: %w", op, err)
+		}
+		if byEmail != nil {
+			return "", ErrEmailAlreadyExists
+		}
+	}
+
+	return normalizedPhone, nil
+}
+
 // Register crea un usuario nuevo.
-// Valida que el teléfono no esté en uso y hashea la password.
+// Exige email, normaliza teléfono y email, valida que no estén en uso y
+// hashea la password.
 func (s *UserService) Register(ctx context.Context, name, phone, password string, email *string) (*domain.User, string, error) {
 	name = strings.TrimSpace(name)
 	phone = strings.TrimSpace(phone)
-
-	if email != nil {
-		cleanEmail := strings.TrimSpace(*email)
-		if cleanEmail == "" {
-			email = nil
-		} else {
-			email = &cleanEmail
-		}
-	}
 
 	if name == "" {
 		return nil, "", ErrNameRequired
@@ -66,13 +100,17 @@ func (s *UserService) Register(ctx context.Context, name, phone, password string
 		return nil, "", ErrPasswordTooShort
 	}
 
-	existing, err := s.repo.FindByPhone(ctx, phone)
+	cleanEmail, err := normalizeOptionalEmail(email)
 	if err != nil {
-		return nil, "", fmt.Errorf("Register: %w", err)
+		return nil, "", err
+	}
+	if cleanEmail == nil {
+		return nil, "", ErrEmailRequired
 	}
 
-	if existing != nil {
-		return nil, "", ErrPhoneAlreadyExists
+	phone, err = s.checkContactAvailable(ctx, "Register", phone, cleanEmail)
+	if err != nil {
+		return nil, "", err
 	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), 12)
@@ -83,13 +121,19 @@ func (s *UserService) Register(ctx context.Context, name, phone, password string
 	user := &domain.User{
 		Name:         name,
 		Phone:        phone,
-		Email:        email,
+		Email:        cleanEmail,
 		PasswordHash: string(hash),
 		Role:         domain.RoleCustomer,
 	}
 
 	id, err := s.repo.Create(ctx, user)
 	if err != nil {
+		if errors.Is(err, domain.ErrDuplicateEmail) {
+			return nil, "", ErrEmailAlreadyExists
+		}
+		if errors.Is(err, domain.ErrDuplicatePhone) {
+			return nil, "", ErrPhoneAlreadyExists
+		}
 		return nil, "", fmt.Errorf("Register: %w", err)
 	}
 
@@ -109,15 +153,6 @@ func (s *UserService) CreateStaff(ctx context.Context, name, phone, password, ro
 	name = strings.TrimSpace(name)
 	phone = strings.TrimSpace(phone)
 
-	if email != nil {
-		cleanEmail := strings.TrimSpace(*email)
-		if cleanEmail == "" {
-			email = nil
-		} else {
-			email = &cleanEmail
-		}
-	}
-
 	if role != domain.RoleReceptionist && role != domain.RoleAdmin {
 		return 0, ErrInvalidRole
 	}
@@ -135,12 +170,14 @@ func (s *UserService) CreateStaff(ctx context.Context, name, phone, password, ro
 		return 0, ErrPasswordTooShort
 	}
 
-	existing, err := s.repo.FindByPhone(ctx, phone)
+	cleanEmail, err := normalizeOptionalEmail(email)
 	if err != nil {
-		return 0, fmt.Errorf("CreateStaff: %w", err)
+		return 0, err
 	}
-	if existing != nil {
-		return 0, ErrPhoneAlreadyExists
+
+	phone, err = s.checkContactAvailable(ctx, "CreateStaff", phone, cleanEmail)
+	if err != nil {
+		return 0, err
 	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), 12)
@@ -151,13 +188,19 @@ func (s *UserService) CreateStaff(ctx context.Context, name, phone, password, ro
 	user := &domain.User{
 		Name:         name,
 		Phone:        phone,
-		Email:        email,
+		Email:        cleanEmail,
 		PasswordHash: string(hash),
 		Role:         role,
 	}
 
 	id, err := s.repo.Create(ctx, user)
 	if err != nil {
+		if errors.Is(err, domain.ErrDuplicateEmail) {
+			return 0, ErrEmailAlreadyExists
+		}
+		if errors.Is(err, domain.ErrDuplicatePhone) {
+			return 0, ErrPhoneAlreadyExists
+		}
 		return 0, fmt.Errorf("CreateStaff: %w", err)
 	}
 
@@ -207,15 +250,22 @@ func (s *UserService) DeleteUser(ctx context.Context, targetID, requesterID int6
 }
 
 // Login valida las credenciales y devuelve el usuario y un JWT si son correctas.
-func (s *UserService) Login(ctx context.Context, phone, password string) (*domain.User, string, error) {
-	phone = strings.TrimSpace(phone)
+func (s *UserService) Login(ctx context.Context, rawPhone, password string) (*domain.User, string, error) {
+	rawPhone = strings.TrimSpace(rawPhone)
 	password = strings.TrimSpace(password)
 
-	if phone == "" || password == "" {
+	if rawPhone == "" || password == "" {
 		return nil, "", ErrInvalidCredentials
 	}
 
-	user, err := s.repo.FindByPhone(ctx, phone)
+	// The user may type the number in any format; a value that is not a
+	// phone at all gets the same answer as a wrong password (no leak).
+	normalizedPhone, err := phone.Normalize(rawPhone)
+	if err != nil {
+		return nil, "", ErrInvalidCredentials
+	}
+
+	user, err := s.repo.FindByPhone(ctx, normalizedPhone)
 	if err != nil {
 		return nil, "", fmt.Errorf("Login: %w", err)
 	}

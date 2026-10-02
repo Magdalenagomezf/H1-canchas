@@ -225,7 +225,8 @@ func (h *BookingController) handleBookingError(c *gin.Context, err error) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 
 	case errors.Is(err, service.ErrNameRequired),
-		errors.Is(err, service.ErrPhoneRequired):
+		errors.Is(err, service.ErrPhoneRequired),
+		errors.Is(err, service.ErrInvalidPhone):
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 
 	case errors.Is(err, service.ErrSlotDoesNotBelong):

@@ -833,3 +833,37 @@ func TestBookingService_GetAll_RepoError(t *testing.T) {
 		t.Errorf("got %v, want wrapped dbErr", err)
 	}
 }
+
+func TestBookingService_CreateManual_InvalidPhone(t *testing.T) {
+	svc := newBookingSvc(&mockBookingRepo{}, &mockSpaceRepoForBooking{})
+
+	for _, phone := range []string{"abc", "123", "-"} {
+		_, err := svc.CreateManual(context.Background(), 99, 1, 1, tomorrow(), "Juan", phone)
+		if !errors.Is(err, ErrInvalidPhone) {
+			t.Errorf("phone %q: got %v, want ErrInvalidPhone", phone, err)
+		}
+	}
+}
+
+func TestBookingService_CreateManual_StoresNormalizedPhone(t *testing.T) {
+	spaceRepo := &mockSpaceRepoForBooking{
+		getByIDFn: func(_ context.Context, _ int64) (*domain.Space, error) {
+			return activeSpaceWithPrice(2000), nil
+		},
+	}
+	var stored *domain.Booking
+	repo := &mockBookingRepo{
+		createFn: func(_ context.Context, _ database.Tx, b *domain.Booking) (int64, error) {
+			stored = b
+			return 1, nil
+		},
+	}
+	svc := newBookingSvc(repo, spaceRepo)
+
+	if _, err := svc.CreateManual(context.Background(), 5, 1, 1, tomorrow(), "Juan", "0383 15-412-3456"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if stored.CustomerPhone == nil || *stored.CustomerPhone != "+5493834123456" {
+		t.Errorf("got phone %v, want +5493834123456", stored.CustomerPhone)
+	}
+}

@@ -67,6 +67,12 @@ Inyección de dependencias manual en `cmd/main.go`. Las interfaces las define el
 ### Users
 - Roles: `customer`, `receptionist`, `admin`
 - Login con teléfono + password. Registro público siempre crea `customer`. Staff lo crea un admin via `POST /admin/users`.
+- **Datos de contacto normalizados (migración 008):**
+  - Teléfono: se guarda en E.164 (`+549…`) vía `pkg/phone.Normalize` (región por defecto `AR`, lib `nyaruka/phonenumbers`). `3834123456`, `0383 15-412-3456` y `+54 9 383 412 3456` dan el mismo `+5493834123456`. La lib no agrega el `9` de móvil en formato local, así que `Normalize` lo agrega siempre para números argentinos. Se aplica en `Register`, `CreateStaff`, `Login` (un teléfono que no se puede normalizar da `credenciales incorrectas`, no se revela) y en `customer_phone` de las reservas manuales y turnos fijos. Los bloqueos de mantenimiento siguen guardando `-` como teléfono (no es un cliente real).
+  - Email: `trim` + `lower`, vacío = `NULL`, formato validado con `net/mail`. Único sin distinguir mayúsculas (índice `users_email_lower_key` sobre `lower(email)`).
+  - **Email obligatorio en el registro público.** En `POST /admin/users` (staff) sigue siendo opcional. Los usuarios existentes quedan sin email.
+  - `UserResponse` (respuesta de auth y `GET /admin/users`) incluye `email` (se omite si es `null`).
+  - Errores nuevos: `ErrInvalidPhone` (400), `ErrInvalidEmail` (400), `ErrEmailRequired` (400), `ErrEmailAlreadyExists` (409). `POST /auth/register` ahora responde 400 a los errores de validación (antes devolvía 500).
 
 ### Spaces
 - Tipos: `cancha_padel`, `cancha_futbol`, `cancha_padbol`, `cancha_beach_voley`, `quincho`
@@ -101,7 +107,7 @@ Inyección de dependencias manual en `cmd/main.go`. Las interfaces las define el
 ### Autenticación (públicos)
 | Método | Ruta | Quién | Descripción |
 |---|---|---|---|
-| POST | `/auth/register` | Público | Crea usuario `customer`, devuelve `{ token, user }` |
+| POST | `/auth/register` | Público | Crea usuario `customer` (email obligatorio), devuelve `{ token, user }` |
 | POST | `/auth/login` | Público | Login con teléfono + password, devuelve `{ token, user }` |
 
 ### Spaces
@@ -204,13 +210,13 @@ Si dos requests llegan al mismo tiempo, el primero inserta y el segundo falla en
 ### Páginas
 | Ruta | Página | Estado |
 |---|---|---|
-| `/` | HomePage | ✅ Rediseñada (ver "Diseño de landing y login"): hero con línea LED, 01 El lugar (slideshow), 02 Espacios (índice tipográfico con datos de `GET /spaces`), 03 El complejo, 04 Cómo reservar, CTA final y footer |
+| `/` | HomePage | ✅ Rediseñada (ver "Diseño de landing y login"): hero con línea LED, 01 El lugar (frase + slideshow de 3 fotos cada 3,5 s), 02 Espacios (índice tipográfico con datos de `GET /spaces`), 03 El complejo, 04 Cómo reservar, CTA final y footer |
 | `/login` | LoginPage | ✅ Login + Registro en tabs, manejo de errores. Rediseñada con el estilo de la landing (la lógica no cambió) |
-| `/canchas` | SpacesPage | ✅ Listado con filtros por tipo |
-| `/canchas/:id` | SpaceDetailPage | ✅ Detalle, selector de fecha, grilla de slots disponibles, reserva, modal con resumen de la seña antes de ir a Mercado Pago |
-| `/mis-reservas` | MyBookingsPage | ✅ Lista de reservas (activas / historial), cancelar con dialog de confirmación |
-| `/pago/resultado/:bookingId` | PaymentResultPage | ✅ Página de retorno desde Mercado Pago con el estado del pago |
-| `/panel` | StaffPanelPage | ✅ Panel receptionist/admin — reservas del día con navegación, reserva manual, turnos fijos y bloqueos, gestión de canchas y usuarios (admin) |
+| `/canchas` | SpacesPage | ✅ Rediseñada. Filtros por tipo (TODOS + 5 tipos). En TODOS muestra una grilla compacta de 3 columnas (`SpacesGrid`); con un filtro activo muestra el índice tipográfico grande (`SpacesIndex`) |
+| `/canchas/:id` | SpaceDetailPage | ✅ Detalle, selector de fecha, grilla de slots disponibles, reserva, modal con resumen de la seña antes de ir a Mercado Pago. Rediseñada: galería, pasos "01/ Fecha" y "02/ Turno", resumen fijo (barra inferior en mobile). Lógica de reserva y pago sin cambios |
+| `/mis-reservas` | MyBookingsPage | ✅ Lista de reservas (activas / historial), cancelar con dialog de confirmación. Rediseñada: filas con hairlines y estados en mono |
+| `/pago/resultado/:bookingId` | PaymentResultPage | ✅ Página de retorno desde Mercado Pago con el estado del pago. Rediseñada: título grande según el estado, resumen de la reserva y CTAs |
+| `/panel` | StaffPanelPage | ✅ Panel receptionist/admin — reservas del día con navegación, reserva manual, turnos fijos y bloqueos, gestión de canchas y usuarios (admin). Rediseñada: tabs en mono, tablas sin bordes con scroll horizontal propio en mobile, modales con el estilo nuevo |
 
 ### Rutas protegidas
 - `PrivateRoute` — redirige a `/login` si no hay sesión (usado en `/mis-reservas`)
@@ -218,18 +224,23 @@ Si dos requests llegan al mismo tiempo, el primero inserta y el segundo falla en
 - `StaffRoute` — redirige a `/login` sin sesión, o a `/` si el rol es `customer` (usado en `/panel`)
 
 ### Componentes compartidos
-- `Navbar` — con estado de auth, responsive (drawer en mobile). Se oculta en `/` y `/login`
-- `components/landing/` — un componente por sección de la landing + `LandingNav` (nav propio de `/` y `/login`, con Mis reservas, Panel para staff y Salir)
+- `Navbar` — el nav viejo. Ya no se muestra en ninguna ruta (todas usan `LandingNav`); solo aparecería en una URL inexistente. Candidato a eliminar
+- `components/landing/` — un componente por sección de la landing, `LandingNav` (nav de todas las rutas, con Mis reservas, Panel para staff y Salir), `SpacesIndex` (índice tipográfico compartido por la home y `/canchas`), `SpacesGrid` (grilla compacta de `/canchas`) y `spaceHelpers.ts`
+- `App.tsx` — `LANDING_PATHS` + `matchPath` decide qué rutas ocultan el `Navbar` viejo
 - `SpaceCard` + `SpaceCardSkeleton` — usado en HomePage y SpacesPage
 
 ### Hooks
 - `useAuth` — contexto global de autenticación, persiste en sessionStorage (aislamiento por tab)
 
-### Diseño de landing y login
+### Diseño del frontend (todas las páginas)
 - Estilo inspirado en la arquitectura del complejo (Grupo Mazzucco): fondo oscuro (`night`), línea de luz cálida tipo LED como firma, señalética numerada `01/`, radius 0, sin sombras ni cajas.
 - Tokens en `@theme` de `src/index.css` con nombres nuevos (`night`, `graphite`, `concrete`, `paper`, `court`, `dusk`, `light`). Radius 0 y fuentes aplicados solo dentro de `.landing`, así el resto de las rutas no cambia.
 - Botones de la landing en azul `dusk` (variantes `court` y `line` en `button.tsx`).
 - Textos, imágenes y placeholders editables en `src/components/landing/content.ts`.
+- Cada página nueva usa el mismo shell: `<div className="landing">` + wrapper `on-dark`, `LandingNav` (modo `solid` fuera de la home), línea LED arriba y `LandingFooter`.
+- Gotcha: `ModalPortal` renderiza en `document.body`, fuera de `.landing`. El contenido de cada modal necesita su propio wrapper `landing on-dark` para heredar fuentes, radius 0 y foco.
+- Gotcha: nunca poner `animate-fade-up` ni un `transform` permanente en contenedores de página: rompe el `position: fixed` del nav y de los modales.
+- Gotcha: el botón de pago de Mercado Pago tiene que seguir siendo un `<a href>` real (deep link en mobile).
 - Gotcha: las animaciones de revelado con `clip-path` observan el marco exterior con `useInView`; un elemento 100% recortado nunca cuenta como visible y la imagen no aparece.
 
 ---
@@ -248,7 +259,7 @@ Si dos requests llegan al mismo tiempo, el primero inserta y el segundo falla en
 ## Cambios al backend durante fase frontend
 
 - CORS middleware en `main.go` (permite `http://localhost:5173`).
-- `/auth/login` y `/auth/register` ahora devuelven `{ token, user: { id, name, phone, role } }` además del JWT.
+- `/auth/login` y `/auth/register` ahora devuelven `{ token, user: { id, name, phone, email?, role } }` además del JWT.
 - `go.mod`, `go.sum`, `.env`, `.env.example` movidos a `backend/` (estructura monorepo correcta).
 
 ---
@@ -283,10 +294,14 @@ Decisiones tomadas con el dueño del negocio al planificar la integración de Ch
 
 Resueltos: bloqueo de canchas por fecha (implementado como booking batches de tipo `maintenance`, no como tabla `space_blocks`) y estado de pago (`deposit_status` / `balance_status`).
 
-### Frontend (landing y login)
+### Frontend (rediseño)
 1. **Fotos faltantes**: `public/images/fachada-noche.jpg` (hero) y `public/images/locales.jpg` (El complejo). Sin ellas se ven bloques oscuros.
 2. **Placeholders en `content.ts`**: número de WhatsApp (hoy falso), link de Google Maps, dirección y cantidades de `FACTS` (canchas y quinchos).
 3. **Verificar mobile** (375px y 768px) y un **login/registro de punta a punta** con el diseño nuevo.
+3b. **Probar el panel a mano** (reserva manual, turno fijo, bloqueo, cancelar) y el flujo de reserva hasta el modal de pago: el rediseño de esas páginas no se revisó visualmente.
+3c. **Mercado Pago en producción**: `SpaceDetailPage` usa `sandbox_init_point` (URL de pruebas). En producción debería usar `init_point`; es un cambio de lógica de pago, pendiente de decidir.
+3d. **Eliminar el `Navbar` viejo** (`components/Navbar.tsx`) o usarlo como fallback de una página 404.
+3e. **Más fotos** para padbol y beach vóley (hoy 1 cada uno en `public/spaces/`).
 4. Menores de la revisión de código:
    - Desde `/login`, los links a secciones de la home (`/#espacios`, etc.) recargan la página completa. Se podría usar `<Link>` con `hash`.
    - `/login/` con barra final muestra los dos navs (el viejo y el nuevo). Normalizar el pathname en `App.tsx`.
@@ -294,7 +309,19 @@ Resueltos: bloqueo de canchas por fecha (implementado como booking batches de ti
    - Las tabs del login no tienen navegación con flechas del teclado (patrón ARIA tabs).
 
 ### Migraciones
-Se aplican manualmente con `psql`, en orden: `001` → `007` (`005_add_payments`, `006_add_booking_batches`, `007_add_padbol_beach_voley_types`).
+Se aplican manualmente con `psql`, en orden: `001` → `008` (`005_add_payments`, `006_add_booking_batches`, `007_add_padbol_beach_voley_types`, `008_normalize_user_email`).
+
+`008` normaliza los emails existentes (`lower(trim())`, `''` → `NULL`) y cambia el `UNIQUE` de `email` por un índice único sobre `lower(email)`. Si dos usuarios chocan al pasar a minúsculas, aborta con la lista de emails duplicados y no cambia nada: hay que corregirlos a mano y volver a correrla. Correrla con `psql -v ON_ERROR_STOP=1 -f backend/migrations/008_normalize_user_email.sql`.
+
+### Deploy de la Fase 1 (orden obligatorio)
+Los teléfonos ya guardados están en el formato en que se cargaron y `Login` ahora busca por el número normalizado. Si no se migran, **los usuarios existentes no pueden iniciar sesión**. Orden:
+
+1. Aplicar la migración `008`.
+2. Deployar el backend nuevo.
+3. Inmediatamente después, desde `backend/`: `go run ./cmd/normalize-phones` (dry run: muestra qué cambiaría, los teléfonos inválidos y los usuarios cuyo número normalizado chocaría con otro).
+4. Revisar la salida y correr `go run ./cmd/normalize-phones --apply`.
+
+El comando usa la misma config/DB que el servidor. Los teléfonos que no se pueden normalizar y los usuarios que chocarían quedan sin tocar y hay que resolverlos a mano. Ignora el `-` de los bloqueos de mantenimiento.
 
 ---
 

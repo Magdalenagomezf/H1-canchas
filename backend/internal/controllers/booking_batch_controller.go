@@ -185,6 +185,7 @@ func (h *BookingBatchController) handleBatchError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, service.ErrNameRequired),
 		errors.Is(err, service.ErrPhoneRequired),
+		errors.Is(err, service.ErrInvalidPhone),
 		errors.Is(err, service.ErrReasonRequired),
 		errors.Is(err, service.ErrInvalidWeekday),
 		errors.Is(err, service.ErrInvalidDateRange),

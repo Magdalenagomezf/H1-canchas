@@ -9,6 +9,7 @@ import (
 	_ "time/tzdata" // embebe la base de zonas horarias: LoadLocation funciona aunque el host no tenga tzdata instalado (ej. contenedores slim)
 
 	"H1-canchas/internal/domain"
+	"H1-canchas/pkg/phone"
 )
 
 const argentinaTZ = "America/Argentina/Buenos_Aires"
@@ -83,6 +84,12 @@ func (s *BookingBatchService) CreateRecurringTeacherBatch(
 	}
 	if customerPhone == "" {
 		return nil, nil, nil, ErrPhoneRequired
+	}
+	// Normalize once here so an invalid phone fails before the batch row is
+	// created, instead of once per date.
+	customerPhone, err := phone.Normalize(customerPhone)
+	if err != nil {
+		return nil, nil, nil, ErrInvalidPhone
 	}
 	if weekday < 0 || weekday > 6 {
 		return nil, nil, nil, ErrInvalidWeekday
@@ -186,7 +193,7 @@ func (s *BookingBatchService) materializeBookings(
 
 	var created, skipped []time.Time
 	for _, date := range dates {
-		booking, err := s.bookingSvc.CreateManual(ctx, createdBy, spaceID, slotID, date, customerName, customerPhone)
+		booking, err := s.bookingSvc.createManual(ctx, createdBy, spaceID, slotID, date, customerName, customerPhone)
 		if err != nil {
 			if errors.Is(err, ErrSlotNotAvailable) {
 				skipped = append(skipped, date)

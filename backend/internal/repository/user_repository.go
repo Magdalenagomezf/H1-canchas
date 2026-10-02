@@ -9,6 +9,7 @@ import (
 	"H1-canchas/internal/domain"
 
 	"github.com/jmoiron/sqlx"
+	"github.com/lib/pq"
 )
 
 // userRepo es la implementación concreta de UserRepository.
@@ -38,6 +39,15 @@ func (r *userRepo) Create(ctx context.Context, user *domain.User) (int64, error)
 	).Scan(&id)
 
 	if err != nil {
+		var pqErr *pq.Error
+		if errors.As(err, &pqErr) && pqErr.Code == "23505" {
+			switch pqErr.Constraint {
+			case "users_email_lower_key":
+				return 0, domain.ErrDuplicateEmail
+			case "users_phone_key":
+				return 0, domain.ErrDuplicatePhone
+			}
+		}
 		return 0, fmt.Errorf("userRepo.Create: %w", err)
 	}
 	return id, nil
@@ -57,6 +67,26 @@ func (r *userRepo) FindByPhone(ctx context.Context, phone string) (*domain.User,
 	}
 	if err != nil {
 		return nil, fmt.Errorf("userRepo.FindByPhone: %w", err)
+	}
+	return &user, nil
+}
+
+// FindByEmail busca por lower(email), igual que el índice único
+// users_email_lower_key, así que matchea sin importar mayúsculas.
+func (r *userRepo) FindByEmail(ctx context.Context, email string) (*domain.User, error) {
+	query := `
+        SELECT id, name, email, phone, password_hash, role, is_active, created_at
+        FROM users
+        WHERE lower(email) = lower($1)`
+
+	var user domain.User
+	err := r.db.GetContext(ctx, &user, query, email)
+
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("userRepo.FindByEmail: %w", err)
 	}
 	return &user, nil
 }

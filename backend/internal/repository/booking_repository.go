@@ -230,6 +230,7 @@ func (r *bookingRepo) GetAllWithDetails(ctx context.Context, userID *int64, date
 
             u.name  AS customer_user_name,
             u.phone AS customer_user_phone,
+            u.email AS customer_user_email,
 
             b.batch_id,
             bb.type   AS batch_type,
@@ -298,6 +299,7 @@ func (r *bookingRepo) GetByIDWithDetails(ctx context.Context, id int64) (*domain
 
             u.name  AS customer_user_name,
             u.phone AS customer_user_phone,
+            u.email AS customer_user_email,
 
             b.batch_id,
             bb.type   AS batch_type,
@@ -369,6 +371,34 @@ func (r *bookingRepo) ConfirmAfterPayment(ctx context.Context, tx database.Tx, b
 	}
 
 	return true, nil
+}
+
+// ClaimConfirmationEmail reserva atómicamente el envío del mail de
+// confirmación: devuelve true solo para quien logra pasar
+// confirmation_email_sent_at de NULL a now(). Cualquier otro llamado
+// concurrente o posterior recibe false, así el mail se envía una sola vez.
+func (r *bookingRepo) ClaimConfirmationEmail(ctx context.Context, bookingID int64) (bool, error) {
+	result, err := r.db.ExecContext(ctx,
+		`UPDATE bookings SET confirmation_email_sent_at = now()
+		 WHERE id = $1 AND confirmation_email_sent_at IS NULL`, bookingID)
+	if err != nil {
+		return false, fmt.Errorf("bookingRepo.ClaimConfirmationEmail: %w", err)
+	}
+	n, err := result.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("bookingRepo.ClaimConfirmationEmail rows affected: %w", err)
+	}
+	return n == 1, nil
+}
+
+// ReleaseConfirmationEmail deshace el claim para que un próximo intento
+// pueda reenviar el mail (se usa cuando el envío falló).
+func (r *bookingRepo) ReleaseConfirmationEmail(ctx context.Context, bookingID int64) error {
+	if _, err := r.db.ExecContext(ctx,
+		`UPDATE bookings SET confirmation_email_sent_at = NULL WHERE id = $1`, bookingID); err != nil {
+		return fmt.Errorf("bookingRepo.ReleaseConfirmationEmail: %w", err)
+	}
+	return nil
 }
 
 // MarkPaidManually marca un tramo (deposit o balance) de una reserva

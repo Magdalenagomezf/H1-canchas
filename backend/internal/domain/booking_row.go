@@ -35,6 +35,7 @@ type BookingDetail struct {
 	CustomerPhone     *string `db:"customer_phone"`
 	CustomerUserName  *string `db:"customer_user_name"`
 	CustomerUserPhone *string `db:"customer_user_phone"`
+	CustomerUserEmail *string `db:"customer_user_email"`
 
 	BatchID     *int64  `db:"batch_id"`
 	BatchType   *string `db:"batch_type"`

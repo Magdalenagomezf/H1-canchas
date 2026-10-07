@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Reserva confirmada</title>
+</head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:Arial,Helvetica,sans-serif;color:#18181b;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:24px 0;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;background:#ffffff;border-radius:8px;padding:32px;">
+          <tr>
+            <td>
+              <h1 style="margin:0 0 16px;font-size:22px;">¡Reserva confirmada!</h1>
+              <p style="margin:0 0 20px;font-size:16px;line-height:1.5;">
+                {{if .CustomerName}}Hola {{.CustomerName}}, t{{else}}T{{end}}u reserva quedó confirmada. Acá tenés el detalle:
+              </p>
+              <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;font-size:16px;line-height:1.6;margin-bottom:20px;">
+                <tr><td style="padding:4px 0;color:#52525b;">Espacio</td><td style="padding:4px 0;text-align:right;"><strong>{{.SpaceName}}</strong></td></tr>
+                <tr><td style="padding:4px 0;color:#52525b;">Fecha</td><td style="padding:4px 0;text-align:right;"><strong>{{.DateText}}</strong></td></tr>
+                <tr><td style="padding:4px 0;color:#52525b;">Horario</td><td style="padding:4px 0;text-align:right;"><strong>{{.TimeText}}</strong></td></tr>
+                <tr><td style="padding:4px 0;color:#52525b;">Seña pagada</td><td style="padding:4px 0;text-align:right;"><strong>{{.DepositPaid}}</strong></td></tr>
+                {{if .BalanceDue}}<tr><td style="padding:4px 0;color:#52525b;">Saldo a pagar en el lugar</td><td style="padding:4px 0;text-align:right;"><strong>{{.BalanceDue}}</strong></td></tr>{{end}}
+              </table>
+              <p style="margin:0 0 24px;">
+                <a href="{{.MyBookingsURL}}" style="display:inline-block;background:#16a34a;color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:6px;font-size:16px;">Ver mis reservas</a>
+              </p>
+              <p style="margin:0;font-size:13px;color:#71717a;line-height:1.5;">
+                Si el botón no funciona, copiá este link en tu navegador: {{.MyBookingsURL}}
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

@@ -22,6 +22,10 @@ type Config struct {
 	BookingHoldTTLMinutes             int
 	DepositPercentage                 float64
 	BookingExpirySweepIntervalMinutes int
+
+	ResendAPIKey string // vacío = los mails solo se loguean
+	EmailFrom    string
+	FrontendURL  string
 }
 
 // Load lee el .env y arma la Config.
@@ -58,6 +62,10 @@ func Load() (*Config, error) {
 	depositPercentage := getEnvFloat("DEPOSIT_PERCENTAGE", 0.15)
 	bookingExpirySweepIntervalMinutes := getEnvInt("BOOKING_EXPIRY_SWEEP_INTERVAL_MINUTES", 2)
 
+	resendAPIKey := getEnv("RESEND_API_KEY", "")
+	emailFrom := getEnv("EMAIL_FROM", "H1 Canchas <onboarding@resend.dev>")
+	frontendURL := getEnv("FRONTEND_URL", "http://localhost:5173")
+
 	// Railway provee DATABASE_URL completa; en local se arma desde variables separadas.
 	var dsn string
 	if dbURL := os.Getenv("DATABASE_URL"); dbURL != "" {
@@ -89,6 +97,10 @@ func Load() (*Config, error) {
 		BookingHoldTTLMinutes:             bookingHoldTTLMinutes,
 		DepositPercentage:                 depositPercentage,
 		BookingExpirySweepIntervalMinutes: bookingExpirySweepIntervalMinutes,
+
+		ResendAPIKey: resendAPIKey,
+		EmailFrom:    emailFrom,
+		FrontendURL:  frontendURL,
 	}, nil
 }
 

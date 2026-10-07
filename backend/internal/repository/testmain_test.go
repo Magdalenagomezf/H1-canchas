@@ -68,6 +68,7 @@ func applyMigrations(db *sqlx.DB) error {
 		"006_add_booking_batches.sql",
 		"007_add_padbol_beach_voley_types.sql",
 		"008_normalize_user_email.sql",
+		"009_add_confirmation_email_sent_at.sql",
 	}
 
 	for _, f := range files {

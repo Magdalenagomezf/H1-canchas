@@ -37,6 +37,12 @@ type MercadoPagoClient interface {
 	GetPayment(ctx context.Context, paymentID int64) (*mercadopago.PaymentInfo, error)
 }
 
+// BookingConfirmationNotifier avisa que una reserva quedó confirmada tras
+// el pago de la seña. La implementación debe ser no bloqueante.
+type BookingConfirmationNotifier interface {
+	NotifyBookingConfirmed(bookingID int64)
+}
+
 type PaymentService struct {
 	repo          PaymentRepo
 	bookingRepo   BookingRepoForPayment
@@ -44,9 +50,10 @@ type PaymentService struct {
 	webhookSecret string
 	backURLBase   string
 	webhookURL    string
+	notifier      BookingConfirmationNotifier // puede ser nil
 }
 
-func NewPaymentService(repo PaymentRepo, bookingRepo BookingRepoForPayment, mp MercadoPagoClient, webhookSecret, backURLBase, webhookURL string) *PaymentService {
+func NewPaymentService(repo PaymentRepo, bookingRepo BookingRepoForPayment, mp MercadoPagoClient, webhookSecret, backURLBase, webhookURL string, notifier BookingConfirmationNotifier) *PaymentService {
 	return &PaymentService{
 		repo:          repo,
 		bookingRepo:   bookingRepo,
@@ -54,6 +61,7 @@ func NewPaymentService(repo PaymentRepo, bookingRepo BookingRepoForPayment, mp M
 		webhookSecret: webhookSecret,
 		backURLBase:   backURLBase,
 		webhookURL:    webhookURL,
+		notifier:      notifier,
 	}
 }
 
@@ -212,18 +220,26 @@ func (s *PaymentService) HandleWebhook(ctx context.Context, xSignature, xRequest
 		return fmt.Errorf("PaymentService.HandleWebhook: %w", err)
 	}
 
+	confirmed := false
 	if info.Status == domain.PaymentTxStatusApproved {
 		// ConfirmAfterPayment's SQL is naturally idempotent (guarded by
 		// status NOT IN cancelled/expired, CASE-based status transition),
 		// so no extra "already processed" guard is needed here even though
 		// the same webhook can legitimately be retried by Mercado Pago.
-		if _, err := s.bookingRepo.ConfirmAfterPayment(ctx, tx, bookingID, kind); err != nil {
+		confirmed, err = s.bookingRepo.ConfirmAfterPayment(ctx, tx, bookingID, kind)
+		if err != nil {
 			return fmt.Errorf("PaymentService.HandleWebhook: %w", err)
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("PaymentService.HandleWebhook: commit: %w", err)
+	}
+
+	// Solo después del commit: si el mail falla, la reserva sigue confirmada.
+	// Webhook duplicados no duplican el mail (claim atómico en el notifier).
+	if s.notifier != nil && confirmed && kind == domain.PaymentKindDeposit {
+		s.notifier.NotifyBookingConfirmed(bookingID)
 	}
 
 	return nil

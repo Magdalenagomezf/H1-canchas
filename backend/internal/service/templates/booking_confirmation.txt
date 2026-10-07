@@ -1,0 +1,13 @@
+¡Reserva confirmada!
+
+{{if .CustomerName}}Hola {{.CustomerName}}, t{{else}}T{{end}}u reserva quedó confirmada. Acá tenés el detalle:
+
+Espacio: {{.SpaceName}}
+Fecha: {{.DateText}}
+Horario: {{.TimeText}}
+Seña pagada: {{.DepositPaid}}
+{{- if .BalanceDue}}
+Saldo a pagar en el lugar: {{.BalanceDue}}
+{{- end}}
+
+Mirá tus reservas acá: {{.MyBookingsURL}}

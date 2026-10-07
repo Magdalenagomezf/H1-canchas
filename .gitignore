@@ -4,3 +4,6 @@
 *.njsproj
 *.sln
 resumen_inicio_proyecto_h1_canchas.docx
+
+# Local AI tooling (machine-specific, auto-generated)
+.atl/

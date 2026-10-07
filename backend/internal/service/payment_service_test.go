@@ -133,7 +133,16 @@ const (
 )
 
 func newPaymentSvc(repo *mockPaymentRepo, bookingRepo *mockBookingRepoForPayment, mp *mockMercadoPagoClient) *PaymentService {
-	return NewPaymentService(repo, bookingRepo, mp, testWebhookSecret, testBackURLBase, testWebhookURL)
+	return NewPaymentService(repo, bookingRepo, mp, testWebhookSecret, testBackURLBase, testWebhookURL, nil)
+}
+
+// mockNotifier implements BookingConfirmationNotifier for unit tests.
+type mockNotifier struct {
+	calls []int64
+}
+
+func (m *mockNotifier) NotifyBookingConfirmed(bookingID int64) {
+	m.calls = append(m.calls, bookingID)
 }
 
 func payableBooking() *domain.Booking {
@@ -641,5 +650,79 @@ func TestPaymentService_MarkUnpaidManually_HappyPath(t *testing.T) {
 	}
 	if len(paymentRepo.callLog) != 0 {
 		t.Errorf("expected no audit row on unmark, got calls %v", paymentRepo.callLog)
+	}
+}
+
+// --- HandleWebhook: notificación de confirmación ---
+
+// webhookNotifierFixture arma un service con notifier para un pago de
+// MP con el estado y external_reference indicados.
+func webhookNotifierFixture(status, externalRef string, bookingRepo *mockBookingRepoForPayment) (*PaymentService, *mockNotifier) {
+	mp := &mockMercadoPagoClient{
+		getPaymentFn: func(_ context.Context, _ int64) (*mercadopago.PaymentInfo, error) {
+			return &mercadopago.PaymentInfo{ID: 123, Status: status, ExternalReference: externalRef}, nil
+		},
+	}
+	paymentRepo := &mockPaymentRepo{
+		getLatestByBookingIDFn: func(_ context.Context, _ int64, _ string) (*domain.Payment, error) {
+			return &domain.Payment{ID: 5, BookingID: 1}, nil
+		},
+	}
+	notifier := &mockNotifier{}
+	svc := NewPaymentService(paymentRepo, bookingRepo, mp, testWebhookSecret, testBackURLBase, testWebhookURL, notifier)
+	return svc, notifier
+}
+
+func TestPaymentService_HandleWebhook_Notifier(t *testing.T) {
+	commitErr := errors.New("commit failed")
+	cases := []struct {
+		name        string
+		status      string
+		externalRef string
+		confirmed   bool
+		commitErr   error
+		wantCalls   int
+		wantErr     bool
+	}{
+		{"approved deposit notifies once", domain.PaymentTxStatusApproved, "1:deposit", true, nil, 1, false},
+		{"approved balance does not notify", domain.PaymentTxStatusApproved, "1:balance", true, nil, 0, false},
+		{"rejected deposit does not notify", domain.PaymentTxStatusRejected, "1:deposit", true, nil, 0, false},
+		{"approved but booking not confirmed does not notify", domain.PaymentTxStatusApproved, "1:deposit", false, nil, 0, false},
+		{"commit failure does not notify", domain.PaymentTxStatusApproved, "1:deposit", true, commitErr, 0, true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			bookingRepo := &mockBookingRepoForPayment{
+				beginTxFn: func(_ context.Context) (database.Tx, error) {
+					return &mockTx{commitErr: tc.commitErr}, nil
+				},
+				confirmAfterPaymentFn: func(_ context.Context, _ database.Tx, _ int64, _ string) (bool, error) {
+					return tc.confirmed, nil
+				},
+			}
+			svc, notifier := webhookNotifierFixture(tc.status, tc.externalRef, bookingRepo)
+
+			err := svc.HandleWebhook(context.Background(), "ts=1,v1=bogus", "req-1", "123")
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("got err %v, wantErr %v", err, tc.wantErr)
+			}
+			if len(notifier.calls) != tc.wantCalls {
+				t.Fatalf("got %d notifier calls, want %d", len(notifier.calls), tc.wantCalls)
+			}
+			if tc.wantCalls == 1 && notifier.calls[0] != 1 {
+				t.Errorf("notified booking %d, want 1", notifier.calls[0])
+			}
+		})
+	}
+}
+
+func TestPaymentService_HandleWebhook_NilNotifierIsSafe(t *testing.T) {
+	bookingRepo := &mockBookingRepoForPayment{}
+	svc, _ := webhookNotifierFixture(domain.PaymentTxStatusApproved, "1:deposit", bookingRepo)
+	svc.notifier = nil
+
+	if err := svc.HandleWebhook(context.Background(), "ts=1,v1=bogus", "req-1", "123"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }

@@ -52,7 +52,7 @@ cd frontend && npm run dev
 cd frontend && npm run build
 ```
 
-There is no migration runner wired into the app — migrations in `backend/migrations/` must be applied manually against the PostgreSQL database (e.g. with `psql`). Run them in order (001 → 008).
+There is no migration runner wired into the app — migrations in `backend/migrations/` must be applied manually against the PostgreSQL database (e.g. with `psql`). Run them in order (001 → 009).
 
 ## Environment
 
@@ -60,7 +60,7 @@ There is no migration runner wired into the app — migrations in `backend/migra
 
 - Required: `JWT_SECRET`, `MP_ACCESS_TOKEN`, `MP_WEBHOOK_SECRET`, `MP_WEBHOOK_URL`.
 - Database: either `DATABASE_URL` (full connection string, takes precedence) or `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`.
-- Optional (with defaults): `PORT` (`8080`), `ALLOWED_ORIGIN` (`http://localhost:5173`), `BOOKING_HOLD_TTL_MINUTES` (`20`), `DEPOSIT_PERCENTAGE` (`0.15`), `BOOKING_EXPIRY_SWEEP_INTERVAL_MINUTES` (`2`).
+- Optional (with defaults): `PORT` (`8080`), `ALLOWED_ORIGIN` (`http://localhost:5173`), `BOOKING_HOLD_TTL_MINUTES` (`20`), `DEPOSIT_PERCENTAGE` (`0.15`), `BOOKING_EXPIRY_SWEEP_INTERVAL_MINUTES` (`2`), `FRONTEND_URL` (`http://localhost:5173`, used for links in emails), `EMAIL_FROM` (`H1 Canchas <onboarding@resend.dev>`), `RESEND_API_KEY` (default empty: emails are only logged — recipient and subject — and never sent).
 
 **Frontend:** `frontend/.env` already contains `VITE_API_URL=http://localhost:8080`. Adjust if needed.
 

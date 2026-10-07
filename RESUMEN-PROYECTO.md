@@ -287,6 +287,21 @@ Decisiones tomadas con el dueño del negocio al planificar la integración de Ch
 
 ---
 
+## Mail de confirmación de reserva (Fase 3)
+
+- **Cuándo se envía**: solo cuando el webhook de Mercado Pago acredita la **seña** (`deposit`) y `ConfirmAfterPayment` devolvió `true` (la reserva no estaba cancelada/expirada). Un pago de saldo, un pago rechazado o un commit fallido no envían nada.
+- **Después del commit y sin bloquear**: `PaymentService` llama a `NotifyBookingConfirmed` recién tras el commit, y este corre en una goroutine con su propio contexto (timeout 15 s), nunca el del request. Si el mail falla, la reserva sigue confirmada y el webhook responde OK; solo se loguea un WARN.
+- **Se envía una sola vez (claim)**: `ClaimConfirmationEmail` hace `UPDATE ... SET confirmation_email_sent_at = now() WHERE id = $1 AND confirmation_email_sent_at IS NULL` y solo quien afecta 1 fila envía. Los reintentos del webhook de MP no duplican el mail. Si el envío falla se libera el claim (`ReleaseConfirmationEmail`) para poder reintentar. También se libera si el propio claim devuelve error (el `UPDATE` pudo aplicarse aunque se perdió la respuesta).
+- **Idempotency key en Resend**: cada envío lleva `Idempotency-Key: booking-confirmation-<id>`. Si el request vence después de que Resend aceptó el mail, el claim se libera y el próximo reintento del webhook no genera un duplicado.
+- **Riesgo aceptado**: si el proceso muere (deploy, crash) entre el claim y el envío, ese mail se pierde. Para este volumen se acepta; resolverlo requiere un estado intermedio o una cola.
+- **Sin destinatario no se reclama**: reservas manuales del staff y usuarios sin email no envían nada ni consumen el claim.
+- **El staff que marca la seña como pagada a mano NO dispara el mail**: `MarkPaidManually` no pasa por el webhook; es una decisión de esta fase.
+- **Proveedor**: Resend (`POST https://api.resend.com/emails`, `pkg/email`). Sin `RESEND_API_KEY` se usa `LogSender`, que solo loguea destinatario y asunto (nunca el cuerpo). Variables: `RESEND_API_KEY`, `EMAIL_FROM`, `FRONTEND_URL` (link a `/mis-reservas`).
+- **Fecha en español sin conversión de zona**: `booking_date` es un `DATE` que se escanea como medianoche UTC; convertirla a hora de Argentina la corre al día anterior. Se arma el texto con Year/Month/Day/Weekday del propio valor y tablas de nombres en español.
+- **Templates**: `internal/service/templates/booking_confirmation.{html,txt}`, embebidos con `go:embed`.
+
+---
+
 ## Pendientes técnicos
 
 ### Backend
@@ -309,7 +324,9 @@ Resueltos: bloqueo de canchas por fecha (implementado como booking batches de ti
    - Las tabs del login no tienen navegación con flechas del teclado (patrón ARIA tabs).
 
 ### Migraciones
-Se aplican manualmente con `psql`, en orden: `001` → `008` (`005_add_payments`, `006_add_booking_batches`, `007_add_padbol_beach_voley_types`, `008_normalize_user_email`).
+Se aplican manualmente con `psql`, en orden: `001` → `009` (`005_add_payments`, `006_add_booking_batches`, `007_add_padbol_beach_voley_types`, `008_normalize_user_email`, `009_add_confirmation_email_sent_at`).
+
+`009` agrega `bookings.confirmation_email_sent_at TIMESTAMP NULL` (aditiva, funciona con datos existentes). Hay que aplicarla **antes** de deployar el backend de la Fase 3: sin la columna, el claim del mail falla (se loguea el error, pero el webhook y la confirmación de la reserva no se ven afectados).
 
 `008` normaliza los emails existentes (`lower(trim())`, `''` → `NULL`) y cambia el `UNIQUE` de `email` por un índice único sobre `lower(email)`. Si dos usuarios chocan al pasar a minúsculas, aborta con la lista de emails duplicados y no cambia nada: hay que corregirlos a mano y volver a correrla. Correrla con `psql -v ON_ERROR_STOP=1 -f backend/migrations/008_normalize_user_email.sql`.
 

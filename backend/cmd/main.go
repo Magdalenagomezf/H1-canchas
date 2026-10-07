@@ -13,6 +13,7 @@ import (
 	"H1-canchas/internal/repository"
 	"H1-canchas/internal/service"
 	"H1-canchas/pkg/database"
+	"H1-canchas/pkg/email"
 	"H1-canchas/pkg/mercadopago"
 
 	"github.com/gin-gonic/gin"
@@ -83,7 +84,17 @@ func main() {
 	bookingBatchCtrl := controllers.NewBookingBatchController(bookingBatchService)
 
 	paymentRepo := repository.NewPaymentRepository(db)
-	paymentService := service.NewPaymentService(paymentRepo, bookingRepo, mpClient, cfg.MPWebhookSecret, cfg.AllowedOrigin, cfg.MPWebhookURL)
+
+	var emailSender service.EmailSender
+	if cfg.ResendAPIKey == "" {
+		log.Println("RESEND_API_KEY no configurada: los mails solo se loguean (destinatario y asunto), no se envían")
+		emailSender = email.LogSender{}
+	} else {
+		emailSender = email.NewResendSender(cfg.ResendAPIKey, cfg.EmailFrom)
+	}
+	notificationService := service.NewNotificationService(bookingRepo, emailSender, cfg.FrontendURL)
+
+	paymentService := service.NewPaymentService(paymentRepo, bookingRepo, mpClient, cfg.MPWebhookSecret, cfg.AllowedOrigin, cfg.MPWebhookURL, notificationService)
 	paymentCtrl := controllers.NewPaymentController(paymentService)
 
 	r := gin.Default()

@@ -62,7 +62,7 @@ There is no migration runner wired into the app — migrations in `backend/migra
 - Database: either `DATABASE_URL` (full connection string, takes precedence) or `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`.
 - Optional (with defaults): `PORT` (`8080`), `ALLOWED_ORIGIN` (`http://localhost:5173`), `BOOKING_HOLD_TTL_MINUTES` (`20`), `DEPOSIT_PERCENTAGE` (`0.15`), `BOOKING_EXPIRY_SWEEP_INTERVAL_MINUTES` (`2`), `FRONTEND_URL` (`http://localhost:5173`, used for links in emails), `EMAIL_FROM` (`H1 Canchas <onboarding@resend.dev>`), `RESEND_API_KEY` (default empty: emails are only logged — recipient and subject — and never sent), `GOOGLE_CLIENT_ID` (OAuth Web client ID for Google login; default empty: `POST /auth/google` answers 503 and the rest of the app works).
 
-**Frontend:** `frontend/.env` already contains `VITE_API_URL=http://localhost:8080`. Adjust if needed.
+**Frontend:** `frontend/.env` already contains `VITE_API_URL=http://localhost:8080`. Adjust if needed. Optional: `VITE_GOOGLE_CLIENT_ID` (same value as the backend `GOOGLE_CLIENT_ID`; empty hides the Google button). Vite reads it only at startup.
 
 ## Architecture
 

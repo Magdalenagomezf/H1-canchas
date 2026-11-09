@@ -37,6 +37,7 @@ export function LandingNav({ solid = false, hideAccountLink = false }: LandingNa
     : isAuthenticated
       ? [
           { label: 'Mis reservas', to: '/mis-reservas' },
+          { label: 'Mi perfil', to: '/mi-perfil' },
           ...(isStaff ? [{ label: 'Panel', to: '/panel' }] : []),
         ]
       : [{ label: 'Iniciar sesión', to: '/login' }];

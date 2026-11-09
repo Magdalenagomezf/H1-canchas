@@ -23,7 +23,12 @@ export default function Navbar() {
   const links = [
     { label: 'Inicio', to: '/' },
     { label: 'Canchas', to: '/canchas' },
-    ...(isAuthenticated ? [{ label: 'Mis reservas', to: '/mis-reservas' }] : []),
+    ...(isAuthenticated
+      ? [
+          { label: 'Mis reservas', to: '/mis-reservas' },
+          { label: 'Mi perfil', to: '/mi-perfil' },
+        ]
+      : []),
     ...(user?.role === 'receptionist' || user?.role === 'admin'
       ? [{ label: 'Panel', to: '/panel' }]
       : []),

@@ -936,7 +936,7 @@ function UsersPanel() {
               <div className="min-w-0">
                 <p className="truncate font-arch text-base font-semibold text-paper">{user.name}</p>
                 <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1">
-                  <p className={cn(MONO, 'text-concrete')}>{user.phone}</p>
+                  <p className={cn(MONO, 'text-concrete')}>{user.phone ?? '—'}</p>
                   <select
                     aria-label={`Rol de ${user.name}`}
                     value={user.role}

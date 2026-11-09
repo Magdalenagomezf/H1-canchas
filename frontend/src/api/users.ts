@@ -1,9 +1,10 @@
 import apiClient from './client';
+import type { User } from '../types';
 
 export interface AdminUser {
   id: number;
   name: string;
-  phone: string;
+  phone: string | null;
   role: 'customer' | 'receptionist' | 'admin';
 }
 
@@ -25,3 +26,16 @@ export const updateUserRole = (id: number, role: string): Promise<void> =>
 
 export const deleteUser = (id: number): Promise<void> =>
   apiClient.delete(`/admin/users/${id}`).then(() => undefined);
+
+/** Fields accepted by PATCH /me. An absent field is left unchanged. */
+export interface UpdateMePayload {
+  name?: string;
+  email?: string;
+  phone?: string;
+}
+
+export const getMe = (): Promise<User> =>
+  apiClient.get<User>('/me').then((r) => r.data);
+
+export const updateMe = (payload: UpdateMePayload): Promise<User> =>
+  apiClient.patch<User>('/me', payload).then((r) => r.data);

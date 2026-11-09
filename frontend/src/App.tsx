@@ -8,6 +8,7 @@ import SpaceDetailPage from './pages/SpaceDetailPage';
 import MyBookingsPage from './pages/MyBookingsPage';
 import StaffPanelPage from './pages/StaffPanelPage';
 import PaymentResultPage from './pages/PaymentResultPage';
+import ProfilePage from './pages/ProfilePage';
 
 function PrivateRoute() {
   const { isAuthenticated } = useAuth();
@@ -32,7 +33,7 @@ function StaffRoute() {
 }
 
 // Routes that render their own landing-styled nav instead of the legacy Navbar.
-const LANDING_PATHS = ['/', '/login', '/canchas', '/canchas/:id', '/mis-reservas', '/pago/resultado/:bookingId', '/panel'];
+const LANDING_PATHS = ['/', '/login', '/canchas', '/canchas/:id', '/mis-reservas', '/pago/resultado/:bookingId', '/panel', '/mi-perfil'];
 
 const isLandingPath = (pathname: string) =>
   LANDING_PATHS.some((path) => matchPath({ path, end: true }, pathname));
@@ -54,6 +55,7 @@ export default function App() {
         <Route element={<PrivateRoute />}>
           <Route path="/mis-reservas" element={<MyBookingsPage />} />
           <Route path="/pago/resultado/:bookingId" element={<PaymentResultPage />} />
+          <Route path="/mi-perfil" element={<ProfilePage />} />
         </Route>
 
         <Route element={<StaffRoute />}>

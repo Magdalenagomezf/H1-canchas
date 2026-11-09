@@ -6,6 +6,8 @@ interface AuthContextValue {
   user: User | null;
   token: string | null;
   setAuth: (user: User, token: string) => void;
+  /** Replaces the stored user (e.g. after editing "Mi perfil"); the token is kept. */
+  updateUser: (user: User) => void;
   logout: () => void;
   isAuthenticated: boolean;
 }
@@ -32,6 +34,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(newToken);
   }, []);
 
+  const updateUser = useCallback((newUser: User) => {
+    sessionStorage.setItem('user', JSON.stringify(newUser));
+    setUser(newUser);
+  }, []);
+
   const logout = useCallback(() => {
     sessionStorage.removeItem('token');
     sessionStorage.removeItem('user');
@@ -41,7 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, token, setAuth, logout, isAuthenticated: !!token }}>
+    <AuthContext.Provider value={{ user, token, setAuth, updateUser, logout, isAuthenticated: !!token }}>
       {children}
     </AuthContext.Provider>
   );

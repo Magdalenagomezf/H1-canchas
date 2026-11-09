@@ -5,6 +5,7 @@ import { motion, AnimatePresence, useInView, useReducedMotion } from 'framer-mot
 import { ArrowRight, Clock } from 'lucide-react';
 import { getSpace, getSlots } from '../api/spaces';
 import { createBooking } from '../api/bookings';
+import { ApiError } from '../api/client';
 import { generatePreference } from '../api/payments';
 import { SPACE_IMAGES } from '../components/SpaceCard';
 import { ModalPortal } from '../components/ModalPortal';
@@ -19,6 +20,7 @@ import { SPACE_TYPE_LABEL } from '@/components/landing/content';
 import { formatPrice } from '@/components/landing/spaceHelpers';
 import { CONTAINER, EASE, GRID, MONO, VIEWPORT } from '@/components/landing/ui';
 import type { BookingDetail } from '../types';
+import type { ProfileLocationState } from './ProfilePage';
 
 const TZ = 'America/Argentina/Buenos_Aires';
 
@@ -64,7 +66,7 @@ export default function SpaceDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
 
   const locationState = location.state as { pendingBooking?: { date: string; slotId: number } } | null;
   const [date, setDate] = useState(locationState?.pendingBooking?.date ?? today);
@@ -96,11 +98,29 @@ export default function SpaceDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['slots', id, date] });
       setConfirmedBooking(booking);
     },
+    onError: (error) => {
+      // The stored user may be stale (e.g. phone removed elsewhere): the backend is the final check.
+      if (error instanceof ApiError && error.code === 'phone_required') goToProfileForPhone();
+    },
   });
+
+  // Online bookings need a phone on the profile; send the user to fill it in and come back.
+  const goToProfileForPhone = () => {
+    const next = location.pathname + location.search;
+    const state: ProfileLocationState = {
+      notice: 'Cargá tu teléfono para poder reservar',
+      pendingBooking: selectedSlot !== null ? { date, slotId: selectedSlot } : undefined,
+    };
+    navigate(`/mi-perfil?next=${encodeURIComponent(next)}`, { state });
+  };
 
   const handleConfirm = () => {
     if (!isAuthenticated) {
       navigate('/login', { state: { from: location, pendingBooking: { date, slotId: selectedSlot } } });
+      return;
+    }
+    if (user?.phone == null) {
+      goToProfileForPhone();
       return;
     }
     bookingMutation.mutate();

@@ -3,8 +3,10 @@ import { Link, useNavigate, useLocation, type Location } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query';
 import { ArrowRight, Eye, EyeOff } from 'lucide-react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
-import { login, register } from '../api/auth';
+import { GoogleLogin } from '@react-oauth/google';
+import { login, loginWithGoogle, register } from '../api/auth';
 import { useAuth } from '../hooks/useAuth';
+import { GOOGLE_CLIENT_ID } from '@/lib/google';
 import { buttonVariants } from '@/components/ui/button';
 import { LandingNav } from '@/components/landing/LandingNav';
 import { LightLine } from '@/components/landing/LightLine';
@@ -139,13 +141,25 @@ export default function LoginPage() {
     },
   });
 
+  const googleMutation = useMutation({
+    mutationFn: (credential: string) => loginWithGoogle(credential),
+    onSuccess: ({ user, token }) => {
+      setAuth(user, token);
+      navigate(redirectTo, { replace: true, state: pendingBooking ? { pendingBooking } : undefined });
+    },
+  });
+  const [googleError, setGoogleError] = useState<string | null>(null);
+
   const handleTabChange = (next: 0 | 1) => {
     setTab(next);
     loginMutation.reset();
     registerMutation.reset();
+    googleMutation.reset();
+    setGoogleError(null);
   };
 
   const error = tab === 0 ? loginMutation.error?.message : registerMutation.error?.message;
+  const googleErrorMessage = googleError ?? googleMutation.error?.message;
   const isPending = tab === 0 ? loginMutation.isPending : registerMutation.isPending;
 
   const title = TITLES[tab];
@@ -322,6 +336,39 @@ export default function LoginPage() {
                   )}
                 </AnimatePresence>
               </div>
+
+              {GOOGLE_CLIENT_ID && (
+                <div className="mt-10 flex flex-col gap-4">
+                  <div className="flex items-center gap-4" aria-hidden="true">
+                    <span className="h-px flex-1 bg-paper/15" />
+                    <span className={cn(MONO, 'text-concrete')}>o</span>
+                    <span className="h-px flex-1 bg-paper/15" />
+                  </div>
+                  {/* The component (not the useGoogleLogin hook) returns an ID token, which is what the backend verifies. */}
+                  <GoogleLogin
+                    containerProps={{ className: 'flex justify-center' }}
+                    onSuccess={({ credential }) => {
+                      setGoogleError(null);
+                      if (credential) googleMutation.mutate(credential);
+                      else setGoogleError('No se pudo iniciar sesión con Google');
+                    }}
+                    onError={() => setGoogleError('No se pudo iniciar sesión con Google')}
+                    text={tab === 0 ? 'signin_with' : 'signup_with'}
+                    theme="filled_black"
+                    shape="rectangular"
+                    size="large"
+                    width="360"
+                  />
+                  {googleMutation.isPending && (
+                    <p className={cn(MONO, 'normal-case tracking-normal text-concrete')}>Ingresando con Google...</p>
+                  )}
+                  {googleErrorMessage && (
+                    <p role="alert" className={cn(MONO, 'normal-case tracking-normal text-red-300')}>
+                      {googleErrorMessage}
+                    </p>
+                  )}
+                </div>
+              )}
 
               <Link
                 to="/"

@@ -12,7 +12,7 @@ Este archivo va en la raíz del repo. Se trabaja **una fase por sesión**: la pe
 | 2. Mail en reservas manuales | Descartada |
 | 3. Mail de confirmación | Hecha (commit `6ba8d73`), probada punta a punta en local. Falta producción: dominio propio en Resend, env vars y `009` en la base de producción |
 | 4a. Google + "Mi perfil" (backend) | Hecha, probada a mano en local (`010` aplicada, `normalize-phones --apply` corrido). Falta producción: `010`, `normalize-phones --apply` y `GOOGLE_CLIENT_ID` |
-| 4b. Google + "Mi perfil" (frontend) | Pendiente, después de 4a |
+| 4b. Google + "Mi perfil" (frontend) | Hecha, probada a mano en local (Google sin teléfono → Mi perfil → reserva; admin rechazado). Falta producción: `VITE_GOOGLE_CLIENT_ID`, origen de producción en Google Cloud y publicar la app de OAuth |
 
 ---
 

@@ -103,7 +103,7 @@ export interface PaymentPreference {
 export interface User {
   id: number;
   name: string;
-  phone: string;
+  phone: string | null; // null for Google accounts until set in "Mi perfil"
   email?: string | null;
   role: 'customer' | 'receptionist' | 'admin';
 }

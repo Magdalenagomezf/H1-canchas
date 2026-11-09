@@ -28,8 +28,8 @@ Cómo se usa este archivo:
 Orden decidido (2026-11-09): primero CI, después QA y PROD. Modelo: Continuous Delivery, como en el TP6 de la materia: QA se actualiza solo y a PROD solo pasa lo que se aprobó, en el horario que se elija.
 
 **CI (no depende de qué servidores se elijan):**
-- [ ] GitHub Actions en cada PR: `go test` con un Postgres de servicio (así los tests de integración del repository dejan de saltearse) + build del frontend + lint.
-- [ ] Protección de rama en `main`: no se mergea con el CI en rojo.
+- [x] GitHub Actions en cada PR: `go test` con un Postgres de servicio (así los tests de integración del repository dejan de saltearse) + build del frontend + lint.
+- [x] Protección de rama en `main`: no se mergea con el CI en rojo. Hecho el 2026-11-09 (PR #1): ruleset sin bypass, todo cambio entra por PR, 0 aprobaciones, checks `Backend (vet + tests)` y `Frontend (lint + build)` obligatorios.
 
 **Entornos** (D2 decidido el 2026-11-09: pipeline en GitHub Actions, como en Mallki):
 - [ ] Decidir D1.

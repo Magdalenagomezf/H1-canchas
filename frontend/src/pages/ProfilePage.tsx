@@ -11,34 +11,17 @@ import { LightLine } from '@/components/landing/LightLine';
 import { SectionLabel } from '@/components/landing/SectionLabel';
 import { CONTAINER, GRID, MONO } from '@/components/landing/ui';
 import { cn } from '@/lib/utils';
+import { fieldOfError, safeNext, type ProfileField } from '@/lib/profile';
 
 const inputClass =
   'w-full border-0 border-b border-paper/25 bg-transparent py-3 text-lg text-paper placeholder:text-paper/30 outline-none transition-colors duration-300 focus:border-paper focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-paper';
 
-type FieldName = 'name' | 'email' | 'phone';
 
 export interface ProfileLocationState {
   /** Message shown above the form, e.g. why the user was sent here. */
   notice?: string;
   /** Booking selection to restore when returning to `next`. */
   pendingBooking?: { date: string; slotId: number };
-}
-
-/** Only same-site paths are accepted as `next`, so the page can't redirect elsewhere. */
-function safeNext(next: string | null): string | null {
-  return next && next.startsWith('/') && !next.startsWith('//') ? next : null;
-}
-
-/**
- * Profile errors (400 validation, 409 duplicates) all start with the field
- * they refer to, e.g. "el teléfono ya está registrado".
- */
-function fieldOfError(message: string): FieldName | null {
-  const m = message.toLowerCase();
-  if (m.startsWith('el nombre')) return 'name';
-  if (m.startsWith('el email')) return 'email';
-  if (m.startsWith('el teléfono')) return 'phone';
-  return null;
 }
 
 function Field({ id, label, error, children }: { id: string; label: string; error?: string; children: ReactNode }) {
@@ -97,7 +80,7 @@ function ProfileForm({ me }: { me: User }) {
 
   const errorMessage = mutation.error?.message;
   const errorField = errorMessage ? fieldOfError(errorMessage) : null;
-  const fieldError = (field: FieldName) => (errorField === field ? errorMessage : undefined);
+  const fieldError = (field: ProfileField) => (errorField === field ? errorMessage : undefined);
 
   const edit = (setter: (v: string) => void) => (value: string) => {
     setter(value);

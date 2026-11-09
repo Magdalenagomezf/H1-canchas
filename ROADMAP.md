@@ -127,7 +127,8 @@ D6 decidido (2026-11-09): las dos cosas, lo legal y lo técnico. Checklist armad
 ### E9. Calidad
 - [x] Arreglar los errores de lint que ya existían (eran 11). Hecho el 2026-11-09 (PR #1).
 - [x] Tests unitarios del frontend con **Vitest**, solo de lógica pura (no pantallas). Hecho el 2026-11-09: fechas y horas en `src/lib/dates.ts` y perfil en `src/lib/profile.ts`, corren en el CI.
-- [ ] 2 o 3 E2E con **Playwright** contra QA, cuando QA exista: entrar, reservar hasta llegar a Mercado Pago, reserva manual desde el panel. Más adelante, el cierre de caja. Pocos y críticos; cada test crea y limpia sus datos.
+- [x] E2E con **Playwright** (2026-11-09): entrar (y contraseña incorrecta), registrarse y reservar hasta llegar a Mercado Pago, reserva manual desde el panel. Corren en el CI contra un entorno descartable; cada test crea y limpia sus datos. Ya encontraron un bug: un turno sin horario dejaba en blanco la página de la cancha.
+- [ ] Apuntar los mismos E2E a QA cuando exista (cambian solo `E2E_BASE_URL`, `E2E_API_URL` y el admin de QA en secrets). Más adelante, el cierre de caja.
 - [ ] Revisar que los tests del backend sigan cubriendo lo nuevo (hoy: service 82%, controllers 45%, repository 63%).
 - [ ] Verificar mobile (375px y 768px).
 - [ ] Probar el panel a mano (reserva manual, turno fijo, bloqueo, cancelar) y el flujo de reserva hasta el pago.

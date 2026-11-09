@@ -25,3 +25,8 @@ dist-ssr
 
 # Local environment (see .env.example)
 .env
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/

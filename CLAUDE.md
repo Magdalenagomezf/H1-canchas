@@ -57,9 +57,13 @@ cd frontend && npm run build
 
 # Frontend unit tests (Vitest; pure logic in src/lib, tests next to the code as *.test.ts)
 cd frontend && npm test
+
+# E2E tests (Playwright, frontend/e2e). The app must be running; each test creates and
+# cleans its own data through an admin account. First time: npx playwright install chromium
+cd frontend && E2E_BASE_URL=http://localhost:5173 E2E_API_URL=http://localhost:8080 \n  E2E_ADMIN_PHONE=<admin phone> E2E_ADMIN_PASSWORD=<admin password> npm run e2e
 ```
 
-CI (`.github/workflows/ci.yml`) runs on every PR and push to `main`: backend `go vet`, `go build` and `go test -race` against a Postgres 16 service (with `REQUIRE_DB=1`, so the repository integration tests fail instead of skipping when the database is missing), a smoke test (`scripts/smoke.sh`) against a fresh build that must report the PR's commit, and frontend `npm run lint`, `npm test` and `npm run build`. Run the same checks locally before pushing.
+CI (`.github/workflows/ci.yml`) runs on every PR and push to `main`: backend `go vet`, `go build` and `go test -race` against a Postgres 16 service (with `REQUIRE_DB=1`, so the repository integration tests fail instead of skipping when the database is missing), a smoke test (`scripts/smoke.sh`) against a fresh build that must report the PR's commit, frontend `npm run lint`, `npm test` and `npm run build`, and the Playwright E2E tests against a throwaway stack (Postgres + backend + `vite preview`, seeded with `frontend/e2e/ci-seed.sql`). The E2E answer the Mercado Pago preference call themselves, because CI has no MP credentials. Run the same checks locally before pushing.
 
 There is no migration runner wired into the app — migrations in `backend/migrations/` must be applied manually against the PostgreSQL database (e.g. with `psql`). Run them in order (001 → 010).
 

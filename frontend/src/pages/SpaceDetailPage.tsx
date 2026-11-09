@@ -21,7 +21,7 @@ import { formatPrice } from '@/components/landing/spaceHelpers';
 import { CONTAINER, EASE, GRID, MONO, VIEWPORT } from '@/components/landing/ui';
 import type { BookingDetail } from '../types';
 import type { ProfileLocationState } from './ProfilePage';
-import { argMinutesOf, formatDuration, timeToMinutes, toArgISO, TZ } from '@/lib/dates';
+import { argMinutesOf, formatDuration, isSlotPast, timeToMinutes, toArgISO, TZ } from '@/lib/dates';
 
 function getNextDays(n: number) {
   const now = new Date();
@@ -281,8 +281,7 @@ export default function SpaceDetailPage() {
                 <div role="group" aria-label="Turnos" className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
                   {slots.map((slot) => {
                     const isBooked = slot.available === false;
-                    const isPast = date === today && slot.start_time !== null
-                      && timeToMinutes(slot.start_time) <= nowMinutes;
+                    const isPast = isSlotPast(slot.start_time, date, today, nowMinutes);
                     const isDisabled = isBooked || isPast;
                     const isSelected = selectedSlot === slot.id;
                     return (

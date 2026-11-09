@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { argMinutesOf, formatDuration, shiftDate, timeToMinutes, toArgISO } from './dates';
+import { argMinutesOf, formatDuration, isSlotPast, shiftDate, timeToMinutes, toArgISO } from './dates';
 
 describe('toArgISO', () => {
   it('uses the Argentina calendar day, not the UTC one', () => {
@@ -23,6 +23,26 @@ describe('timeToMinutes', () => {
 
   it('parses a TIME serialized as a full datetime, ignoring the Z', () => {
     expect(timeToMinutes('0000-01-01T18:30:00Z')).toBe(18 * 60 + 30);
+  });
+});
+
+describe('isSlotPast', () => {
+  const today = '2026-11-09';
+  const sixPm = 18 * 60;
+
+  it('is past when today and the slot already started', () => {
+    expect(isSlotPast('17:00:00', today, today, sixPm)).toBe(true);
+    expect(isSlotPast('18:00:00', today, today, sixPm)).toBe(true);
+  });
+
+  it('is not past when the slot starts later today or on another day', () => {
+    expect(isSlotPast('19:00:00', today, today, sixPm)).toBe(false);
+    expect(isSlotPast('17:00:00', '2026-11-10', today, sixPm)).toBe(false);
+  });
+
+  it('is never past for a slot without a start time (the API omits the field)', () => {
+    expect(isSlotPast(undefined, today, today, sixPm)).toBe(false);
+    expect(isSlotPast(null, today, today, sixPm)).toBe(false);
   });
 });
 

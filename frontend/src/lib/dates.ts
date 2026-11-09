@@ -23,6 +23,21 @@ export function timeToMinutes(time: string): number {
   return Number(h) * 60 + Number(m);
 }
 
+/**
+ * Whether a slot can no longer be booked: it is today and already started.
+ * Slots without a start time never count as past. The API omits the field
+ * for them, so it can arrive as undefined, not only null.
+ */
+export function isSlotPast(
+  startTime: string | null | undefined,
+  date: string,
+  today: string,
+  nowMinutes: number,
+): boolean {
+  if (date !== today || startTime == null) return false;
+  return timeToMinutes(startTime) <= nowMinutes;
+}
+
 export function formatDuration(minutes: number): string {
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;

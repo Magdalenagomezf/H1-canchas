@@ -26,8 +26,12 @@ All backend commands must be run from the `backend/` directory.
 # Run the server
 cd backend && go run ./cmd/main.go
 
-# Build binary
-cd backend && go build -o h1-canchas ./cmd/main.go
+# Build binary (build the package ./cmd, not ./cmd/main.go: only then Go embeds
+# the git commit that GET /health reports)
+cd backend && go build -o h1-canchas ./cmd
+
+# Smoke test a running backend (optionally checking the commit it reports)
+bash scripts/smoke.sh http://localhost:8080 $(git rev-parse --short HEAD)
 
 # Run tests
 cd backend && go test ./...
@@ -52,7 +56,7 @@ cd frontend && npm run dev
 cd frontend && npm run build
 ```
 
-CI (`.github/workflows/ci.yml`) runs on every PR and push to `main`: backend `go vet`, `go build` and `go test -race` against a Postgres 16 service (with `REQUIRE_DB=1`, so the repository integration tests fail instead of skipping when the database is missing), and frontend `npm run lint` and `npm run build`. Run the same checks locally before pushing.
+CI (`.github/workflows/ci.yml`) runs on every PR and push to `main`: backend `go vet`, `go build` and `go test -race` against a Postgres 16 service (with `REQUIRE_DB=1`, so the repository integration tests fail instead of skipping when the database is missing), a smoke test (`scripts/smoke.sh`) against a fresh build that must report the PR's commit, and frontend `npm run lint` and `npm run build`. Run the same checks locally before pushing.
 
 There is no migration runner wired into the app — migrations in `backend/migrations/` must be applied manually against the PostgreSQL database (e.g. with `psql`). Run them in order (001 → 010).
 
@@ -94,7 +98,7 @@ Online bookings start as `pending` with a hold (`expires_at`, default 20 min) to
 **Booking batches:** staff can create recurring weekly bookings (`recurring_teacher`) or maintenance blocks (`maintenance`). Both materialize real `confirmed` bookings tagged with `batch_id` (max range 366 days); already-taken dates are skipped. Cancelling a batch cancels only today's and future bookings.
 
 **Route access summary:**
-- Public: `GET /health`, `GET /spaces`, `GET /spaces/:id`, `GET /spaces/:id/slots`, `POST /payments/webhook`, `POST /auth/register`, `POST /auth/login`, `POST /auth/google`
+- Public: `GET /health` (pings the database: 200 `{status, db, commit}`, or 503 when the database is unreachable; `commit` comes from `APP_COMMIT` or the git revision embedded at build time, `unknown` under `go run`), `GET /spaces`, `GET /spaces/:id`, `GET /spaces/:id/slots`, `POST /payments/webhook`, `POST /auth/register`, `POST /auth/login`, `POST /auth/google`
 - Any authenticated user: `GET /me`, `PATCH /me`, `POST /bookings`, `GET /bookings` (own bookings), `GET /bookings/:id`, `PATCH /bookings/:id/cancel`, `POST /bookings/:id/payments`
 - Receptionist: `PUT /spaces/:id`, `GET /admin/bookings`, `POST /bookings/manual`, `POST /bookings/recurring`, `POST /bookings/block`, `GET /bookings/batches`, `PATCH /bookings/batches/:id/cancel`, `PATCH /bookings/:id/payment`
 - Admin: all of the above + `POST /spaces`, `POST /spaces/:id/slots`, `DELETE /spaces/:id`, `DELETE /admin/spaces/:id`, `GET/POST /admin/users`, `PATCH /admin/users/:id/role`, `DELETE /admin/users/:id`

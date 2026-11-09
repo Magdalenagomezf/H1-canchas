@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"log"
-	"net/http"
 	"time"
 
 	"H1-canchas/config"
@@ -12,6 +11,7 @@ import (
 	"H1-canchas/internal/middleware"
 	"H1-canchas/internal/repository"
 	"H1-canchas/internal/service"
+	"H1-canchas/pkg/buildinfo"
 	"H1-canchas/pkg/database"
 	"H1-canchas/pkg/email"
 	"H1-canchas/pkg/google"
@@ -144,12 +144,9 @@ func main() {
 		auth.POST("/google", authCtrl.GoogleLogin)
 	}
 
-	r.GET("/health", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"status": "ok",
-			"db":     "connected",
-		})
-	})
+	commit := buildinfo.Commit()
+	log.Printf("running commit %s", commit)
+	r.GET("/health", controllers.NewHealthController(db, commit).Health)
 
 	// Rutas públicas
 	r.GET("/spaces", spaceController.GetAll)

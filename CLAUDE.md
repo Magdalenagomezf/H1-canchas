@@ -54,9 +54,12 @@ cd frontend && npm run dev
 
 # Frontend build
 cd frontend && npm run build
+
+# Frontend unit tests (Vitest; pure logic in src/lib, tests next to the code as *.test.ts)
+cd frontend && npm test
 ```
 
-CI (`.github/workflows/ci.yml`) runs on every PR and push to `main`: backend `go vet`, `go build` and `go test -race` against a Postgres 16 service (with `REQUIRE_DB=1`, so the repository integration tests fail instead of skipping when the database is missing), a smoke test (`scripts/smoke.sh`) against a fresh build that must report the PR's commit, and frontend `npm run lint` and `npm run build`. Run the same checks locally before pushing.
+CI (`.github/workflows/ci.yml`) runs on every PR and push to `main`: backend `go vet`, `go build` and `go test -race` against a Postgres 16 service (with `REQUIRE_DB=1`, so the repository integration tests fail instead of skipping when the database is missing), a smoke test (`scripts/smoke.sh`) against a fresh build that must report the PR's commit, and frontend `npm run lint`, `npm test` and `npm run build`. Run the same checks locally before pushing.
 
 There is no migration runner wired into the app — migrations in `backend/migrations/` must be applied manually against the PostgreSQL database (e.g. with `psql`). Run them in order (001 → 010).
 

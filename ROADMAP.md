@@ -125,8 +125,8 @@ D6 decidido (2026-11-09): las dos cosas, lo legal y lo técnico. Checklist armad
 - [ ] Revisar que los errores no muestren información interna y que los logs no guarden datos sensibles (contraseñas, tokens).
 
 ### E9. Calidad
-- [ ] Arreglar los 12 errores de lint que ya existen (requisito para exigir lint verde en el CI).
-- [ ] Tests unitarios del frontend con **Vitest**, solo de lógica pura (no pantallas). Hay poca lógica en el frontend, así que serán pocos.
+- [x] Arreglar los errores de lint que ya existían (eran 11). Hecho el 2026-11-09 (PR #1).
+- [x] Tests unitarios del frontend con **Vitest**, solo de lógica pura (no pantallas). Hecho el 2026-11-09: fechas y horas en `src/lib/dates.ts` y perfil en `src/lib/profile.ts`, corren en el CI.
 - [ ] 2 o 3 E2E con **Playwright** contra QA, cuando QA exista: entrar, reservar hasta llegar a Mercado Pago, reserva manual desde el panel. Más adelante, el cierre de caja. Pocos y críticos; cada test crea y limpia sus datos.
 - [ ] Revisar que los tests del backend sigan cubriendo lo nuevo (hoy: service 82%, controllers 45%, repository 63%).
 - [ ] Verificar mobile (375px y 768px).

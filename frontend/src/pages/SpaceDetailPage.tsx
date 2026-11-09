@@ -21,12 +21,7 @@ import { formatPrice } from '@/components/landing/spaceHelpers';
 import { CONTAINER, EASE, GRID, MONO, VIEWPORT } from '@/components/landing/ui';
 import type { BookingDetail } from '../types';
 import type { ProfileLocationState } from './ProfilePage';
-
-const TZ = 'America/Argentina/Buenos_Aires';
-
-function toArgISO(d: Date): string {
-  return d.toLocaleDateString('en-CA', { timeZone: TZ });
-}
+import { argMinutesOf, formatDuration, timeToMinutes, toArgISO, TZ } from '@/lib/dates';
 
 function getNextDays(n: number) {
   const now = new Date();
@@ -40,28 +35,6 @@ function getNextDays(n: number) {
 const DAYS = getNextDays(14);
 const today = toArgISO(DAYS[0]);
 
-function getArgNowMinutes(): number {
-  const [h, m] = new Date().toLocaleTimeString('en-GB', { timeZone: TZ, hour12: false }).split(':');
-  return Number(h) * 60 + Number(m);
-}
-
-function slotStartMinutes(time: string): number {
-  // start_time viene como "HH:MM:SS" o, si la API serializa un TIME sin zona
-  // como datetime completo, como "0000-01-01THH:MM:SSZ" — en ambos casos
-  // la hora es local (Argentina), la "Z" no implica una conversión real a UTC.
-  const clock = time.includes('T') ? time.split('T')[1] : time;
-  const [h, m] = clock.split(':');
-  return Number(h) * 60 + Number(m);
-}
-
-function formatDuration(minutes: number): string {
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  if (h === 0) return `${m} min`;
-  if (m === 0) return h === 1 ? '1 hora' : `${h} horas`;
-  return `${h} h ${m} min`;
-}
-
 export default function SpaceDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -73,7 +46,7 @@ export default function SpaceDetailPage() {
   const [selectedSlot, setSelectedSlot] = useState<number | null>(locationState?.pendingBooking?.slotId ?? null);
   const [imgIndex, setImgIndex] = useState(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const [nowMinutes, setNowMinutes] = useState(() => getArgNowMinutes());
+  const [nowMinutes, setNowMinutes] = useState(() => argMinutesOf());
   const [confirmedBooking, setConfirmedBooking] = useState<BookingDetail | null>(null);
 
   const queryClient = useQueryClient();
@@ -137,7 +110,7 @@ export default function SpaceDetailPage() {
   }, [images.length]);
 
   useEffect(() => {
-    const id = setInterval(() => setNowMinutes(getArgNowMinutes()), 30_000);
+    const id = setInterval(() => setNowMinutes(argMinutesOf()), 30_000);
     return () => clearInterval(id);
   }, []);
 
@@ -309,7 +282,7 @@ export default function SpaceDetailPage() {
                   {slots.map((slot) => {
                     const isBooked = slot.available === false;
                     const isPast = date === today && slot.start_time !== null
-                      && slotStartMinutes(slot.start_time) <= nowMinutes;
+                      && timeToMinutes(slot.start_time) <= nowMinutes;
                     const isDisabled = isBooked || isPast;
                     const isSelected = selectedSlot === slot.id;
                     return (
@@ -539,7 +512,7 @@ function PaymentSummaryModal({ booking, onClose }: { booking: BookingDetail; onC
   });
 
   const durationMinutes = booking.slot.start_time && booking.slot.end_time
-    ? slotStartMinutes(booking.slot.end_time) - slotStartMinutes(booking.slot.start_time)
+    ? timeToMinutes(booking.slot.end_time) - timeToMinutes(booking.slot.start_time)
     : null;
 
   const payClass = cn(buttonVariants({ variant: 'court' }), 'h-14 flex-1 justify-center gap-3 text-base font-semibold');

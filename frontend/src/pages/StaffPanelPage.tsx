@@ -18,6 +18,7 @@ import { LandingNav } from '@/components/landing/LandingNav';
 import { LightLine } from '@/components/landing/LightLine';
 import { SectionLabel } from '@/components/landing/SectionLabel';
 import { CONTAINER, EASE, MONO } from '@/components/landing/ui';
+import { shiftDate, toArgISO, TZ } from '@/lib/dates';
 
 type Tab = 'bookings' | 'fixed' | 'spaces' | 'users';
 
@@ -31,22 +32,10 @@ const STATUS_CONFIG: Record<BookingStatus, { label: string; dot: string; text: s
   completed: { label: 'Completada', dot: 'bg-concrete', text: 'text-concrete' },
 };
 
-const TZ = 'America/Argentina/Buenos_Aires';
-
-function toArgISO(d: Date): string {
-  return d.toLocaleDateString('en-CA', { timeZone: TZ });
-}
-
 function formatDate(iso: string) {
   return new Date(iso + 'T12:00:00').toLocaleDateString('es-AR', {
     weekday: 'long', day: 'numeric', month: 'long', timeZone: TZ,
   });
-}
-
-function shiftDate(iso: string, days: number) {
-  const d = new Date(iso + 'T12:00:00');
-  d.setDate(d.getDate() + days);
-  return toArgISO(d);
 }
 
 const today = toArgISO(new Date());

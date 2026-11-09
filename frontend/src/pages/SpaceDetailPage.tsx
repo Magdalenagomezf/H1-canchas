@@ -7,7 +7,7 @@ import { getSpace, getSlots } from '../api/spaces';
 import { createBooking } from '../api/bookings';
 import { ApiError } from '../api/client';
 import { generatePreference } from '../api/payments';
-import { SPACE_IMAGES } from '../components/SpaceCard';
+import { SPACE_IMAGES } from '../components/spaceMeta';
 import { ModalPortal } from '../components/ModalPortal';
 import { useAuth } from '../hooks/useAuth';
 import { cn } from '@/lib/utils';

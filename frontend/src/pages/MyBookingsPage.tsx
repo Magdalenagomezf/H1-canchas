@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { getMyBookings, cancelBooking } from '../api/bookings';
 import type { BookingDetail, BookingStatus } from '../types';
-import { SPACE_LABELS } from '../components/SpaceCard';
+import { SPACE_LABELS } from '../components/spaceMeta';
 import { ModalPortal } from '../components/ModalPortal';
 import { cn } from '@/lib/utils';
 import { buttonVariants } from '@/components/ui/button';

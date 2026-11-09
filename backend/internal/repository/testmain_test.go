@@ -31,8 +31,7 @@ func TestMain(m *testing.M) {
 	// Connect to admin DB to create the test DB.
 	admin, err := sqlx.Connect("postgres", adminDSN)
 	if err != nil {
-		fmt.Printf("skipping integration tests: postgres not available (%v)\n", err)
-		os.Exit(0)
+		skipOrFail("postgres not available", err)
 	}
 
 	admin.MustExec(fmt.Sprintf("DROP DATABASE IF EXISTS %s", testDBName))
@@ -42,8 +41,7 @@ func TestMain(m *testing.M) {
 	// Connect to the test DB and apply migrations.
 	testDB, err = sqlx.Connect("postgres", testDSN)
 	if err != nil {
-		fmt.Printf("skipping integration tests: could not connect to test DB (%v)\n", err)
-		os.Exit(0)
+		skipOrFail("could not connect to test DB", err)
 	}
 	defer testDB.Close()
 
@@ -53,6 +51,17 @@ func TestMain(m *testing.M) {
 	}
 
 	os.Exit(m.Run())
+}
+
+// skipOrFail skips the integration tests when Postgres is missing, unless
+// REQUIRE_DB is set (CI sets it so a missing database fails instead of passing silently).
+func skipOrFail(reason string, err error) {
+	if os.Getenv("REQUIRE_DB") != "" {
+		fmt.Printf("integration tests require postgres: %s (%v)\n", reason, err)
+		os.Exit(1)
+	}
+	fmt.Printf("skipping integration tests: %s (%v)\n", reason, err)
+	os.Exit(0)
 }
 
 func applyMigrations(db *sqlx.DB) error {

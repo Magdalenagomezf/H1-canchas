@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { motion, useReducedMotion } from 'framer-motion';
@@ -21,7 +21,13 @@ export default function PaymentResultPage() {
   const navigate = useNavigate();
   const reduce = useReducedMotion();
   const mpStatus = searchParams.get('status');
-  const startedAtRef = useRef(Date.now());
+  const [startedAt] = useState(() => Date.now());
+  const [waitExpired, setWaitExpired] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setWaitExpired(true), MAX_WAIT_MS);
+    return () => clearTimeout(timer);
+  }, []);
 
   const { data: booking } = useQuery({
     queryKey: ['booking', bookingId],
@@ -29,7 +35,7 @@ export default function PaymentResultPage() {
     enabled: !!bookingId,
     refetchInterval: (query) => {
       const paid = query.state.data?.deposit_status === 'paid';
-      const expired = Date.now() - startedAtRef.current > MAX_WAIT_MS;
+      const expired = Date.now() - startedAt > MAX_WAIT_MS;
       if (paid || mpStatus === 'rejected' || expired) return false;
       return POLL_INTERVAL_MS;
     },
@@ -37,7 +43,7 @@ export default function PaymentResultPage() {
 
   const isPaid = booking?.deposit_status === 'paid';
   const isRejected = mpStatus === 'rejected' && !isPaid;
-  const timedOut = !isPaid && !isRejected && Date.now() - startedAtRef.current > MAX_WAIT_MS;
+  const timedOut = !isPaid && !isRejected && waitExpired;
 
   const title = isPaid ? 'Pago aprobado' : isRejected ? 'Pago rechazado' : 'Pago pendiente';
   const heading = isPaid

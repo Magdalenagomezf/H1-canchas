@@ -1,4 +1,4 @@
-import { SPACE_IMAGES } from '@/components/SpaceCard';
+import { SPACE_IMAGES } from '@/components/spaceMeta';
 import type { Space } from '@/types';
 
 export const getSpaceImage = (space: Space) => SPACE_IMAGES[space.type]?.[0];

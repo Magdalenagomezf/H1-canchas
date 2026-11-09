@@ -8,8 +8,8 @@ import {
 } from '../api/bookings';
 import { getSpaces, getSlots, createSpace, updateSpace, deleteSpace } from '../api/spaces';
 import { getUsers, createStaffUser, updateUserRole, deleteUser } from '../api/users';
-import type { BookingDetail, BookingStatus, BookingBatch } from '../types';
-import { SPACE_LABELS } from '../components/SpaceCard';
+import type { BookingDetail, BookingStatus, BookingBatch, SpaceType } from '../types';
+import { SPACE_LABELS } from '../components/spaceMeta';
 import { ModalPortal } from '../components/ModalPortal';
 import { useAuth } from '../hooks/useAuth';
 import { cn } from '@/lib/utils';
@@ -834,7 +834,7 @@ function SpacesPanel() {
   const [form, setForm] = useState({ name: '', type: 'cancha_padel', description: '', price_per_slot: '' });
 
   const createMutation = useMutation({
-    mutationFn: () => createSpace({ name: form.name, type: form.type as any, description: form.description, price_per_slot: Number(form.price_per_slot) }),
+    mutationFn: () => createSpace({ name: form.name, type: form.type as SpaceType, description: form.description, price_per_slot: Number(form.price_per_slot) }),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['spaces'] }); setShowNew(false); setForm({ name: '', type: 'cancha_padel', description: '', price_per_slot: '' }); },
   });
 
@@ -915,7 +915,7 @@ function UsersPanel() {
           <input aria-label="Nombre" placeholder="Nombre" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className={FIELD} />
           <input aria-label="Teléfono" type="tel" placeholder="Teléfono" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} className={FIELD} />
           <input aria-label="Contraseña" type="password" placeholder="Contraseña" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} className={FIELD} />
-          <select aria-label="Rol" value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value as any }))} className={FIELD}>
+          <select aria-label="Rol" value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value as typeof f.role }))} className={FIELD}>
             <option value="receptionist">Recepcionista</option>
             <option value="admin">Administrador</option>
           </select>

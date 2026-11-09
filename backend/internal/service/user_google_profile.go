@@ -54,8 +54,16 @@ func (s *UserService) LoginWithGoogle(ctx context.Context, credential string) (*
 	}
 
 	identity, err := s.google.Verify(ctx, credential)
-	if err != nil || identity == nil || !identity.EmailVerified || identity.Sub == "" {
-		return nil, "", ErrInvalidGoogleToken
+	if err != nil {
+		// Keep the technical cause (audience, expiry, signature...) for the logs;
+		// the controller only shows ErrInvalidGoogleToken's message.
+		return nil, "", fmt.Errorf("%w: %v", ErrInvalidGoogleToken, err)
+	}
+	if identity == nil || identity.Sub == "" {
+		return nil, "", fmt.Errorf("%w: verifier returned no identity", ErrInvalidGoogleToken)
+	}
+	if !identity.EmailVerified {
+		return nil, "", ErrGoogleEmailNotVerified
 	}
 
 	email, err := normalizeEmail(identity.Email)

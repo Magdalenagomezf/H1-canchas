@@ -230,7 +230,11 @@ func (h *AuthController) GoogleLogin(c *gin.Context) {
 		switch {
 		case errors.Is(err, service.ErrGoogleNotConfigured):
 			c.JSON(http.StatusServiceUnavailable, gin.H{"error": err.Error()})
-		case errors.Is(err, service.ErrInvalidGoogleToken),
+		case errors.Is(err, service.ErrInvalidGoogleToken):
+			// err carries the technical cause: log it, never show it.
+			log.Printf("WARN GoogleLogin rejected token: %v", err)
+			c.JSON(http.StatusUnauthorized, gin.H{"error": service.ErrInvalidGoogleToken.Error()})
+		case errors.Is(err, service.ErrGoogleEmailNotVerified),
 			errors.Is(err, service.ErrUserInactive):
 			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		case errors.Is(err, service.ErrGoogleStaffAccount):

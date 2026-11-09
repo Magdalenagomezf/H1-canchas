@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -45,6 +46,7 @@ func TestAuthController_GoogleLogin_ErrorStatus(t *testing.T) {
 	}{
 		{service.ErrGoogleNotConfigured, http.StatusServiceUnavailable},
 		{service.ErrInvalidGoogleToken, http.StatusUnauthorized},
+		{service.ErrGoogleEmailNotVerified, http.StatusUnauthorized},
 		{service.ErrUserInactive, http.StatusUnauthorized},
 		{service.ErrGoogleStaffAccount, http.StatusForbidden},
 		{service.ErrGoogleAccountConflict, http.StatusConflict},
@@ -61,6 +63,45 @@ func TestAuthController_GoogleLogin_ErrorStatus(t *testing.T) {
 			w := doJSON(newAuthRouter(svc), http.MethodPost, "/auth/google", map[string]string{"credential": "x"})
 			if w.Code != tc.want {
 				t.Errorf("got %d, want %d", w.Code, tc.want)
+			}
+		})
+	}
+}
+
+// The user only ever sees these texts; the technical cause stays in the logs.
+func TestAuthController_GoogleLogin_UserFacingMessages(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{
+			"invalid token with technical cause",
+			fmt.Errorf("%w: google: validating id token: audience mismatch", service.ErrInvalidGoogleToken),
+			"No pudimos iniciar sesión con Google. Recargá la página y probá de nuevo.",
+		},
+		{
+			"email not verified",
+			service.ErrGoogleEmailNotVerified,
+			"Tu cuenta de Google no tiene el email verificado. Verificalo en Google o registrate con tu teléfono.",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			svc := &mockUserService{
+				loginWithGoogleFn: func(_ context.Context, _ string) (*domain.User, string, error) {
+					return nil, "", tc.err
+				},
+			}
+			w := doJSON(newAuthRouter(svc), http.MethodPost, "/auth/google", map[string]string{"credential": "x"})
+
+			var resp map[string]string
+			_ = json.Unmarshal(w.Body.Bytes(), &resp)
+			if w.Code != http.StatusUnauthorized {
+				t.Errorf("got status %d, want 401", w.Code)
+			}
+			if resp["error"] != tc.want {
+				t.Errorf("got message %q, want %q", resp["error"], tc.want)
 			}
 		})
 	}

@@ -48,7 +48,6 @@ func TestUserService_LoginWithGoogle_InvalidToken(t *testing.T) {
 		v    *fakeGoogleVerifier
 	}{
 		{"verifier error", &fakeGoogleVerifier{err: errors.New("bad signature")}},
-		{"email not verified", &fakeGoogleVerifier{identity: &GoogleIdentity{Sub: "s", Email: "a@b.com", EmailVerified: false}}},
 		{"empty email", &fakeGoogleVerifier{identity: &GoogleIdentity{Sub: "s", Email: "", EmailVerified: true}}},
 		{"malformed email", &fakeGoogleVerifier{identity: &GoogleIdentity{Sub: "s", Email: "nope", EmailVerified: true}}},
 	}
@@ -65,6 +64,33 @@ func TestUserService_LoginWithGoogle_InvalidToken(t *testing.T) {
 				t.Errorf("got %v, want ErrInvalidGoogleToken", err)
 			}
 		})
+	}
+}
+
+func TestUserService_LoginWithGoogle_InvalidTokenKeepsCauseForLogs(t *testing.T) {
+	v := &fakeGoogleVerifier{err: errors.New("audience mismatch")}
+
+	_, _, err := newGoogleSvc(&mockUserRepo{}, v).LoginWithGoogle(context.Background(), "tok")
+	if !errors.Is(err, ErrInvalidGoogleToken) {
+		t.Fatalf("got %v, want ErrInvalidGoogleToken", err)
+	}
+	if !strings.Contains(err.Error(), "audience mismatch") {
+		t.Errorf("error %q must keep the verifier cause so the controller can log it", err)
+	}
+}
+
+func TestUserService_LoginWithGoogle_EmailNotVerified(t *testing.T) {
+	v := &fakeGoogleVerifier{identity: &GoogleIdentity{Sub: "s", Email: "a@b.com", EmailVerified: false}}
+	repo := &mockUserRepo{
+		findByGoogleSubFn: func(context.Context, string) (*domain.User, error) {
+			t.Error("repo must not be touched when the email is not verified")
+			return nil, nil
+		},
+	}
+
+	_, _, err := newGoogleSvc(repo, v).LoginWithGoogle(context.Background(), "tok")
+	if !errors.Is(err, ErrGoogleEmailNotVerified) {
+		t.Errorf("got %v, want ErrGoogleEmailNotVerified", err)
 	}
 }
 

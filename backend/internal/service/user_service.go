@@ -21,6 +21,9 @@ type UserRepo interface {
 	FindByPhone(ctx context.Context, phone string) (*domain.User, error)
 	FindByEmail(ctx context.Context, email string) (*domain.User, error)
 	FindByID(ctx context.Context, id int64) (*domain.User, error)
+	FindByGoogleSub(ctx context.Context, sub string) (*domain.User, error)
+	SetGoogleSub(ctx context.Context, id int64, sub string) error
+	UpdateProfile(ctx context.Context, id int64, name string, email, phone *string) error
 	GetAll(ctx context.Context) ([]domain.User, error)
 	UpdateRole(ctx context.Context, id int64, role string) error
 	HasBookings(ctx context.Context, id int64) (bool, error)
@@ -30,12 +33,16 @@ type UserRepo interface {
 type UserService struct {
 	repo      UserRepo
 	jwtSecret string
+	google    GoogleTokenVerifier // nil when GOOGLE_CLIENT_ID is not configured
 }
 
-func NewUserService(repo UserRepo, jwtSecret string) *UserService {
+// NewUserService builds the service. google may be nil: LoginWithGoogle then
+// answers ErrGoogleNotConfigured.
+func NewUserService(repo UserRepo, jwtSecret string, google GoogleTokenVerifier) *UserService {
 	return &UserService{
 		repo:      repo,
 		jwtSecret: jwtSecret,
+		google:    google,
 	}
 }
 
@@ -118,11 +125,12 @@ func (s *UserService) Register(ctx context.Context, name, phone, password string
 		return nil, "", fmt.Errorf("Register: hasheando password: %w", err)
 	}
 
+	hashStr := string(hash)
 	user := &domain.User{
 		Name:         name,
-		Phone:        phone,
+		Phone:        &phone,
 		Email:        cleanEmail,
-		PasswordHash: string(hash),
+		PasswordHash: &hashStr,
 		Role:         domain.RoleCustomer,
 	}
 
@@ -185,11 +193,12 @@ func (s *UserService) CreateStaff(ctx context.Context, name, phone, password, ro
 		return 0, fmt.Errorf("CreateStaff: hasheando password: %w", err)
 	}
 
+	hashStr := string(hash)
 	user := &domain.User{
 		Name:         name,
-		Phone:        phone,
+		Phone:        &phone,
 		Email:        cleanEmail,
-		PasswordHash: string(hash),
+		PasswordHash: &hashStr,
 		Role:         role,
 	}
 
@@ -278,7 +287,13 @@ func (s *UserService) Login(ctx context.Context, rawPhone, password string) (*do
 		return nil, "", ErrUserInactive
 	}
 
-	err = bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password))
+	// An account without a password (Google only) gets the same answer as a
+	// wrong password, so the response does not reveal how it was created.
+	if user.PasswordHash == nil {
+		return nil, "", ErrInvalidCredentials
+	}
+
+	err = bcrypt.CompareHashAndPassword([]byte(*user.PasswordHash), []byte(password))
 	if err != nil {
 		return nil, "", ErrInvalidCredentials
 	}

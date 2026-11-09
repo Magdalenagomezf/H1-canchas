@@ -21,6 +21,16 @@ var (
 	ErrEmailRequired      = errors.New("el email es obligatorio")
 	ErrEmailAlreadyExists = errors.New("el email ya está registrado")
 
+	// login con Google y perfil
+	ErrInvalidGoogleToken    = errors.New("el token de Google no es válido")
+	ErrGoogleStaffAccount    = errors.New("Esta cuenta tiene que iniciar sesión con teléfono y contraseña")
+	ErrGoogleAccountConflict = errors.New("ese email ya está vinculado a otra cuenta de Google")
+	ErrGoogleNotConfigured   = errors.New("El inicio de sesión con Google no está configurado")
+	ErrNameTooLong           = errors.New("el nombre no puede superar los 100 caracteres")
+	ErrProfilePhoneMissing   = errors.New("Cargá tu teléfono en Mi perfil para poder reservar")
+	// The JWT is still valid but its user no longer exists (e.g. deleted by an admin).
+	ErrSessionUserNotFound = errors.New("tu sesión ya no es válida, volvé a iniciar sesión")
+
 	// genéricos — cualquier service los puede usar
 	ErrNotFound     = errors.New("recurso no encontrado")
 	ErrUnauthorized = errors.New("no autorizado")

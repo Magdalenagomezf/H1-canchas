@@ -27,13 +27,40 @@ type mockUserService struct {
 	listUsersFn   func(ctx context.Context) ([]domain.User, error)
 	updateRoleFn  func(ctx context.Context, id int64, newRole string) error
 	deleteUserFn  func(ctx context.Context, targetID, requesterID int64) error
+
+	loginWithGoogleFn func(ctx context.Context, credential string) (*domain.User, string, error)
+	getProfileFn      func(ctx context.Context, userID int64) (*domain.User, error)
+	updateProfileFn   func(ctx context.Context, userID int64, name, email, phone *string) (*domain.User, error)
+}
+
+func ptr(s string) *string { return &s }
+
+func (m *mockUserService) LoginWithGoogle(ctx context.Context, credential string) (*domain.User, string, error) {
+	if m.loginWithGoogleFn != nil {
+		return m.loginWithGoogleFn(ctx, credential)
+	}
+	return &domain.User{ID: 1, Role: domain.RoleCustomer}, "tok", nil
+}
+
+func (m *mockUserService) GetProfile(ctx context.Context, userID int64) (*domain.User, error) {
+	if m.getProfileFn != nil {
+		return m.getProfileFn(ctx, userID)
+	}
+	return &domain.User{ID: userID, Role: domain.RoleCustomer}, nil
+}
+
+func (m *mockUserService) UpdateProfile(ctx context.Context, userID int64, name, email, phone *string) (*domain.User, error) {
+	if m.updateProfileFn != nil {
+		return m.updateProfileFn(ctx, userID, name, email, phone)
+	}
+	return &domain.User{ID: userID, Role: domain.RoleCustomer}, nil
 }
 
 func (m *mockUserService) Register(ctx context.Context, name, phone, password string, email *string) (*domain.User, string, error) {
 	if m.registerFn != nil {
 		return m.registerFn(ctx, name, phone, password, email)
 	}
-	return &domain.User{ID: 1, Name: name, Phone: phone, Email: email, Role: domain.RoleCustomer}, "tok", nil
+	return &domain.User{ID: 1, Name: name, Phone: &phone, Email: email, Role: domain.RoleCustomer}, "tok", nil
 }
 
 func (m *mockUserService) CreateStaff(ctx context.Context, name, phone, password, role string, email *string) (int64, error) {
@@ -47,7 +74,7 @@ func (m *mockUserService) Login(ctx context.Context, phone, password string) (*d
 	if m.loginFn != nil {
 		return m.loginFn(ctx, phone, password)
 	}
-	return &domain.User{ID: 1, Phone: phone, Role: domain.RoleCustomer}, "tok", nil
+	return &domain.User{ID: 1, Phone: &phone, Role: domain.RoleCustomer}, "tok", nil
 }
 
 func (m *mockUserService) ListUsers(ctx context.Context) ([]domain.User, error) {
@@ -77,6 +104,9 @@ func newAuthRouter(svc userServiceI) *gin.Engine {
 	r.POST("/auth/register", ctrl.Register)
 	r.POST("/auth/login", ctrl.Login)
 	r.POST("/admin/users", ctrl.CreateStaff)
+	r.POST("/auth/google", ctrl.GoogleLogin)
+	r.GET("/me", ctrl.GetMe)
+	r.PATCH("/me", ctrl.UpdateMe)
 	return r
 }
 
@@ -110,7 +140,7 @@ func TestAuthController_Register_Success(t *testing.T) {
 	svc := &mockUserService{
 		registerFn: func(_ context.Context, _, _, _ string, _ *string) (*domain.User, string, error) {
 			email := "juan@example.com"
-			return &domain.User{ID: 5, Name: "Juan", Phone: "123", Email: &email, Role: domain.RoleCustomer}, "jwt-token", nil
+			return &domain.User{ID: 5, Name: "Juan", Phone: ptr("123"), Email: &email, Role: domain.RoleCustomer}, "jwt-token", nil
 		},
 	}
 	r := newAuthRouter(svc)
@@ -220,7 +250,7 @@ func TestAuthController_Login_UserInactive(t *testing.T) {
 func TestAuthController_Login_Success(t *testing.T) {
 	svc := &mockUserService{
 		loginFn: func(_ context.Context, _, _ string) (*domain.User, string, error) {
-			return &domain.User{ID: 1, Name: "Juan", Phone: "123", Role: domain.RoleCustomer}, "jwt-token", nil
+			return &domain.User{ID: 1, Name: "Juan", Phone: ptr("123"), Role: domain.RoleCustomer}, "jwt-token", nil
 		},
 	}
 	r := newAuthRouter(svc)

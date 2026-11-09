@@ -17,6 +17,9 @@ type mockUserRepo struct {
 	findByPhoneFn  func(ctx context.Context, phone string) (*domain.User, error)
 	findByEmailFn  func(ctx context.Context, email string) (*domain.User, error)
 	findByIDFn     func(ctx context.Context, id int64) (*domain.User, error)
+	findByGoogleSubFn func(ctx context.Context, sub string) (*domain.User, error)
+	setGoogleSubFn    func(ctx context.Context, id int64, sub string) error
+	updateProfileFn   func(ctx context.Context, id int64, name string, email, phone *string) error
 	getAllFn        func(ctx context.Context) ([]domain.User, error)
 	updateRoleFn   func(ctx context.Context, id int64, role string) error
 	hasBookingsFn  func(ctx context.Context, id int64) (bool, error)
@@ -51,6 +54,27 @@ func (m *mockUserRepo) FindByID(ctx context.Context, id int64) (*domain.User, er
 	return nil, nil
 }
 
+func (m *mockUserRepo) FindByGoogleSub(ctx context.Context, sub string) (*domain.User, error) {
+	if m.findByGoogleSubFn != nil {
+		return m.findByGoogleSubFn(ctx, sub)
+	}
+	return nil, nil
+}
+
+func (m *mockUserRepo) SetGoogleSub(ctx context.Context, id int64, sub string) error {
+	if m.setGoogleSubFn != nil {
+		return m.setGoogleSubFn(ctx, id, sub)
+	}
+	return nil
+}
+
+func (m *mockUserRepo) UpdateProfile(ctx context.Context, id int64, name string, email, phone *string) error {
+	if m.updateProfileFn != nil {
+		return m.updateProfileFn(ctx, id, name, email, phone)
+	}
+	return nil
+}
+
 func (m *mockUserRepo) GetAll(ctx context.Context) ([]domain.User, error) {
 	if m.getAllFn != nil {
 		return m.getAllFn(ctx)
@@ -80,7 +104,7 @@ func (m *mockUserRepo) Delete(ctx context.Context, id int64) error {
 }
 
 func newUserSvc(repo *mockUserRepo) *UserService {
-	return NewUserService(repo, "test-secret")
+	return NewUserService(repo, "test-secret", nil)
 }
 
 // --- UserService.Register ---
@@ -148,7 +172,7 @@ func TestUserService_Register_HappyPath(t *testing.T) {
 			if u.Role != domain.RoleCustomer {
 				t.Errorf("expected role %q, got %q", domain.RoleCustomer, u.Role)
 			}
-			if u.PasswordHash == "" {
+			if u.PasswordHash == nil || *u.PasswordHash == "" {
 				t.Error("expected non-empty password hash")
 			}
 			return 42, nil
@@ -302,7 +326,7 @@ func TestUserService_Login_WrongPassword(t *testing.T) {
 	hash, _ := bcrypt.GenerateFromPassword([]byte("correctpassword"), bcrypt.MinCost)
 	repo := &mockUserRepo{
 		findByPhoneFn: func(_ context.Context, _ string) (*domain.User, error) {
-			return &domain.User{ID: 1, IsActive: true, PasswordHash: string(hash)}, nil
+			return &domain.User{ID: 1, IsActive: true, PasswordHash: ptr(string(hash))}, nil
 		},
 	}
 	svc := newUserSvc(repo)
@@ -321,10 +345,10 @@ func TestUserService_Login_HappyPath(t *testing.T) {
 			return &domain.User{
 				ID:           7,
 				Name:         "Juan",
-				Phone:        "1122334455",
+				Phone:        ptr("1122334455"),
 				Role:         domain.RoleCustomer,
 				IsActive:     true,
-				PasswordHash: string(hash),
+				PasswordHash: ptr(string(hash)),
 			}, nil
 		},
 	}
@@ -364,8 +388,8 @@ func TestUserService_Register_StoresNormalizedContact(t *testing.T) {
 	if stored.Email == nil || *stored.Email != "juan.perez@example.com" {
 		t.Errorf("got email %v, want juan.perez@example.com", stored.Email)
 	}
-	if stored.Phone != "+5493834123456" {
-		t.Errorf("got phone %q, want +5493834123456", stored.Phone)
+	if stored.Phone == nil || *stored.Phone != "+5493834123456" {
+		t.Errorf("got phone %v, want +5493834123456", stored.Phone)
 	}
 }
 
@@ -483,8 +507,8 @@ func TestUserService_CreateStaff_EmailOptionalButNormalized(t *testing.T) {
 	if stored.Email == nil || *stored.Email != "ana@example.com" {
 		t.Errorf("got email %v, want ana@example.com", stored.Email)
 	}
-	if stored.Phone != "+5491122334455" {
-		t.Errorf("got phone %q, want +5491122334455", stored.Phone)
+	if stored.Phone == nil || *stored.Phone != "+5491122334455" {
+		t.Errorf("got phone %v, want +5491122334455", stored.Phone)
 	}
 }
 
@@ -531,7 +555,7 @@ func TestUserService_Login_NormalizesPhone(t *testing.T) {
 			repo := &mockUserRepo{
 				findByPhoneFn: func(_ context.Context, phone string) (*domain.User, error) {
 					lookedUp = phone
-					return &domain.User{ID: 7, IsActive: true, PasswordHash: string(hash)}, nil
+					return &domain.User{ID: 7, IsActive: true, PasswordHash: ptr(string(hash))}, nil
 				},
 			}
 			svc := newUserSvc(repo)

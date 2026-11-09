@@ -229,6 +229,10 @@ func (h *BookingController) handleBookingError(c *gin.Context, err error) {
 		errors.Is(err, service.ErrInvalidPhone):
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 
+	case errors.Is(err, service.ErrProfilePhoneMissing):
+		// "code" lets the frontend react without matching on the message.
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error(), "code": "phone_required"})
+
 	case errors.Is(err, service.ErrSlotDoesNotBelong):
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 
@@ -237,6 +241,9 @@ func (h *BookingController) handleBookingError(c *gin.Context, err error) {
 
 	case errors.Is(err, service.ErrSlotNotAvailable):
 		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+
+	case errors.Is(err, service.ErrSessionUserNotFound):
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 
 	case errors.Is(err, service.ErrUnauthorized):
 		c.JSON(http.StatusForbidden, gin.H{"error": "no tenés permiso para realizar esta acción"})

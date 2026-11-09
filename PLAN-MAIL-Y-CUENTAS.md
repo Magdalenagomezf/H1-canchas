@@ -10,8 +10,8 @@ Este archivo va en la raíz del repo. Se trabaja **una fase por sesión**: la pe
 |------|--------|
 | 1. Datos de contacto prolijos | Hecha (commit `4909fab`) |
 | 2. Mail en reservas manuales | Descartada |
-| 3. Mail de confirmación | Implementada, **sin commitear**. Falta: correr `go test ./...`, revisar `.env.example`, aplicar `009` y commitear |
-| 4a. Google + "Mi perfil" (backend) | Pendiente |
+| 3. Mail de confirmación | Hecha (commit `6ba8d73`), probada punta a punta en local. Falta producción: dominio propio en Resend, env vars y `009` en la base de producción |
+| 4a. Google + "Mi perfil" (backend) | Hecha, probada a mano en local (`010` aplicada, `normalize-phones --apply` corrido). Falta producción: `010`, `normalize-phones --apply` y `GOOGLE_CLIENT_ID` |
 | 4b. Google + "Mi perfil" (frontend) | Pendiente, después de 4a |
 
 ---

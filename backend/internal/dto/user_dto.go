@@ -31,7 +31,7 @@ type CreateStaffRequest struct {
 type UserResponse struct {
 	ID    int64   `json:"id"`
 	Name  string  `json:"name"`
-	Phone string  `json:"phone"`
+	Phone *string `json:"phone"` // null (never omitted) when the account has no phone yet
 	Email *string `json:"email,omitempty"`
 	Role  string  `json:"role"`
 }
@@ -45,6 +45,20 @@ func NewUserResponse(u *domain.User) UserResponse {
 type AuthResponse struct {
 	Token string       `json:"token"`
 	User  UserResponse `json:"user"`
+}
+
+// GoogleLoginRequest is the JSON for POST /auth/google: the ID token that
+// Google Sign-In hands to the browser.
+type GoogleLoginRequest struct {
+	Credential string `json:"credential" binding:"required"`
+}
+
+// UpdateProfileRequest is the JSON for PATCH /me. A missing field (nil
+// pointer) means "leave unchanged".
+type UpdateProfileRequest struct {
+	Name  *string `json:"name"`
+	Email *string `json:"email"`
+	Phone *string `json:"phone"`
 }
 
 // UpdateRoleRequest es el JSON para cambiar el rol de un usuario.

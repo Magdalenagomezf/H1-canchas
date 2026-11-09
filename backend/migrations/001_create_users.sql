@@ -12,7 +12,7 @@ CREATE TABLE users (
 
     is_active BOOLEAN NOT NULL DEFAULT true,
 
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT users_role_check
     CHECK (role IN ('customer', 'receptionist', 'admin'))

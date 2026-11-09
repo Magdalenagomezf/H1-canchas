@@ -66,7 +66,7 @@ func main() {
 
 func run(ctx context.Context, db *sqlx.DB, apply bool) error {
 	var users, bookings []row
-	if err := db.SelectContext(ctx, &users, `SELECT id, phone FROM users ORDER BY id`); err != nil {
+	if err := db.SelectContext(ctx, &users, `SELECT id, phone FROM users WHERE phone IS NOT NULL ORDER BY id`); err != nil {
 		return fmt.Errorf("loading users: %w", err)
 	}
 	if err := db.SelectContext(ctx, &bookings,

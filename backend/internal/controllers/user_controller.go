@@ -18,6 +18,9 @@ type userServiceI interface {
 	Register(ctx context.Context, name, phone, password string, email *string) (*domain.User, string, error)
 	CreateStaff(ctx context.Context, name, phone, password, role string, email *string) (int64, error)
 	Login(ctx context.Context, phone, password string) (*domain.User, string, error)
+	LoginWithGoogle(ctx context.Context, credential string) (*domain.User, string, error)
+	GetProfile(ctx context.Context, userID int64) (*domain.User, error)
+	UpdateProfile(ctx context.Context, userID int64, name, email, phone *string) (*domain.User, error)
 	ListUsers(ctx context.Context) ([]domain.User, error)
 	UpdateRole(ctx context.Context, id int64, newRole string) error
 	DeleteUser(ctx context.Context, targetID, requesterID int64) error
@@ -40,6 +43,7 @@ func userInputErrorStatus(err error) (status int, ok bool) {
 	case errors.Is(err, service.ErrInvalidRole),
 		errors.Is(err, service.ErrNameRequired),
 		errors.Is(err, service.ErrPhoneRequired),
+		errors.Is(err, service.ErrNameTooLong),
 		errors.Is(err, service.ErrInvalidPhone),
 		errors.Is(err, service.ErrPasswordRequired),
 		errors.Is(err, service.ErrPasswordTooShort),
@@ -210,4 +214,81 @@ func (h *AuthController) Login(c *gin.Context) {
 		Token: token,
 		User:  dto.NewUserResponse(user),
 	})
+}
+
+// GoogleLogin godoc
+// POST /auth/google
+func (h *AuthController) GoogleLogin(c *gin.Context) {
+	var req dto.GoogleLoginRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	user, token, err := h.userService.LoginWithGoogle(c.Request.Context(), req.Credential)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrGoogleNotConfigured):
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": err.Error()})
+		case errors.Is(err, service.ErrInvalidGoogleToken),
+			errors.Is(err, service.ErrUserInactive):
+			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		case errors.Is(err, service.ErrGoogleStaffAccount):
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		case errors.Is(err, service.ErrGoogleAccountConflict),
+			errors.Is(err, service.ErrEmailAlreadyExists):
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		default:
+			log.Printf("GoogleLogin error: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "error interno"})
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.AuthResponse{
+		Token: token,
+		User:  dto.NewUserResponse(user),
+	})
+}
+
+// GetMe godoc — GET /me
+func (h *AuthController) GetMe(c *gin.Context) {
+	user, err := h.userService.GetProfile(c.Request.Context(), c.GetInt64("user_id"))
+	if err != nil {
+		if errors.Is(err, service.ErrNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "usuario no encontrado"})
+			return
+		}
+		log.Printf("GetMe error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "error interno"})
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.NewUserResponse(user))
+}
+
+// UpdateMe godoc — PATCH /me
+func (h *AuthController) UpdateMe(c *gin.Context) {
+	var req dto.UpdateProfileRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "payload inválido: " + err.Error()})
+		return
+	}
+
+	user, err := h.userService.UpdateProfile(c.Request.Context(), c.GetInt64("user_id"), req.Name, req.Email, req.Phone)
+	if err != nil {
+		if status, ok := userInputErrorStatus(err); ok {
+			c.JSON(status, gin.H{"error": err.Error()})
+			return
+		}
+		if errors.Is(err, service.ErrNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "usuario no encontrado"})
+			return
+		}
+		log.Printf("UpdateMe error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "error interno"})
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.NewUserResponse(user))
 }

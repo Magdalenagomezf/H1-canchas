@@ -131,9 +131,95 @@ const (
 	testDepositPct = 0.15
 )
 
-// newBookingSvc is a shortcut to build a BookingService with both mocks.
+// mockBookingUserLookup implements BookingUserLookup. By default every user
+// exists and has a phone.
+type mockBookingUserLookup struct {
+	findByIDFn func(ctx context.Context, id int64) (*domain.User, error)
+}
+
+func (m *mockBookingUserLookup) FindByID(ctx context.Context, id int64) (*domain.User, error) {
+	if m.findByIDFn != nil {
+		return m.findByIDFn(ctx, id)
+	}
+	return &domain.User{ID: id, Phone: ptr("+5493834123456"), IsActive: true}, nil
+}
+
+// newBookingSvc is a shortcut to build a BookingService with the mocks; the
+// customer exists and has a phone.
 func newBookingSvc(repo *mockBookingRepo, spaceRepo *mockSpaceRepoForBooking) *BookingService {
-	return NewBookingService(repo, spaceRepo, testHoldTTL, testDepositPct)
+	return NewBookingService(repo, spaceRepo, &mockBookingUserLookup{}, testHoldTTL, testDepositPct)
+}
+
+// --- BookingService.Create: customer phone ---
+
+func TestBookingService_Create_CustomerWithoutPhone(t *testing.T) {
+	users := &mockBookingUserLookup{
+		findByIDFn: func(_ context.Context, id int64) (*domain.User, error) {
+			return &domain.User{ID: id, Phone: nil}, nil
+		},
+	}
+	spaceRepo := &mockSpaceRepoForBooking{
+		getByIDFn: func(_ context.Context, _ int64) (*domain.Space, error) {
+			t.Error("space must not be looked up before the phone check")
+			return nil, nil
+		},
+	}
+	svc := NewBookingService(&mockBookingRepo{}, spaceRepo, users, testHoldTTL, testDepositPct)
+
+	_, err := svc.Create(context.Background(), 7, 1, 1, tomorrow())
+	if !errors.Is(err, ErrProfilePhoneMissing) {
+		t.Errorf("got %v, want ErrProfilePhoneMissing", err)
+	}
+	if errors.Is(err, ErrPhoneRequired) {
+		t.Error("ErrProfilePhoneMissing must not be ErrPhoneRequired")
+	}
+}
+
+func TestBookingService_Create_PhoneAddedAfterwardsAllowsBooking(t *testing.T) {
+	// Simulates PATCH /me adding a phone between two attempts.
+	var phone *string
+	users := &mockBookingUserLookup{
+		findByIDFn: func(_ context.Context, id int64) (*domain.User, error) {
+			return &domain.User{ID: id, Phone: phone}, nil
+		},
+	}
+	spaceRepo := &mockSpaceRepoForBooking{
+		getByIDFn: func(_ context.Context, _ int64) (*domain.Space, error) {
+			return activeSpaceWithPrice(1000), nil
+		},
+	}
+	svc := NewBookingService(&mockBookingRepo{}, spaceRepo, users, testHoldTTL, testDepositPct)
+
+	if _, err := svc.Create(context.Background(), 7, 1, 1, tomorrow()); !errors.Is(err, ErrProfilePhoneMissing) {
+		t.Fatalf("before phone: got %v, want ErrProfilePhoneMissing", err)
+	}
+	phone = ptr("+5493834123456")
+	if _, err := svc.Create(context.Background(), 7, 1, 1, tomorrow()); err != nil {
+		t.Fatalf("after phone: unexpected error: %v", err)
+	}
+}
+
+func TestBookingService_Create_UserLookupError(t *testing.T) {
+	dbErr := errors.New("db down")
+	users := &mockBookingUserLookup{
+		findByIDFn: func(_ context.Context, _ int64) (*domain.User, error) { return nil, dbErr },
+	}
+	svc := NewBookingService(&mockBookingRepo{}, &mockSpaceRepoForBooking{}, users, testHoldTTL, testDepositPct)
+
+	if _, err := svc.Create(context.Background(), 7, 1, 1, tomorrow()); !errors.Is(err, dbErr) {
+		t.Errorf("got %v, want wrapped dbErr", err)
+	}
+}
+
+func TestBookingService_Create_UnknownUser(t *testing.T) {
+	users := &mockBookingUserLookup{
+		findByIDFn: func(_ context.Context, _ int64) (*domain.User, error) { return nil, nil },
+	}
+	svc := NewBookingService(&mockBookingRepo{}, &mockSpaceRepoForBooking{}, users, testHoldTTL, testDepositPct)
+
+	if _, err := svc.Create(context.Background(), 7, 1, 1, tomorrow()); !errors.Is(err, ErrSessionUserNotFound) {
+		t.Errorf("got %v, want ErrSessionUserNotFound", err)
+	}
 }
 
 // --- BookingService.Create ---

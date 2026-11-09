@@ -69,6 +69,7 @@ func applyMigrations(db *sqlx.DB) error {
 		"007_add_padbol_beach_voley_types.sql",
 		"008_normalize_user_email.sql",
 		"009_add_confirmation_email_sent_at.sql",
+		"010_google_login.sql",
 	}
 
 	for _, f := range files {

@@ -102,6 +102,16 @@ Inyección de dependencias manual en `cmd/main.go`. Las interfaces las define el
 
 ---
 
+- **Login con Google y "Mi perfil" (Fase 4a, migración 010):**
+  - `users.phone`, `users.password_hash` y `users.google_sub` (`VARCHAR(255) UNIQUE`) son nullables; `domain.User` usa `*string` para los tres. `CHECK users_login_method_chk`: toda cuenta tiene contraseña o `google_sub`.
+  - `UserResponse.phone` es `*string` **sin** `omitempty`: el frontend recibe `null`, no la ausencia del campo.
+  - `POST /auth/google` (orden): verificar token (firma, `aud`, `exp` con `idtoken.Validate` + chequeo manual de `iss`) y `email_verified` → `FindByGoogleSub` → si no existe, `FindByEmail`: rol distinto de `customer` = 403 (no se vincula), `customer` con otro `google_sub` = 409 (no se pisa), `customer` sin `google_sub` = se vincula → si no existe, se crea `customer` con `phone` y `password_hash` en `NULL` (nombre de Google cortado a 100 caracteres, o lo anterior a la `@`). Un INSERT concurrente que choca por unique da `ErrEmailAlreadyExists` (409) sin reintentar. Al final se chequea `is_active` y se devuelve el mismo `AuthResponse` que `Login`.
+  - `Login` con teléfono sobre una cuenta sin contraseña da `credenciales incorrectas` (no revela que es de Google).
+  - `PATCH /me`: el email y el teléfono no se pueden borrar; se normalizan igual que en el registro; se chequea que no los use otro usuario y además se mapea la violación de unique del `UPDATE`. Cambiar el email de una cuenta de Google está permitido (el login busca por `sub`). No cambia `role` ni contraseña.
+  - **Reservar online exige teléfono:** `BookingService.Create` devuelve `ErrProfilePhoneMissing` ("Cargá tu teléfono en Mi perfil para poder reservar") y el controller responde **422** `{ "error": ..., "code": "phone_required" }`. Es un error distinto de `ErrPhoneRequired` (400, "falta en el formulario").
+  - `GOOGLE_CLIENT_ID` es opcional: si está vacío, `POST /auth/google` responde 503 ("El inicio de sesión con Google no está configurado") y el resto de la app funciona.
+  - `cmd/normalize-phones` ahora ignora usuarios con `phone IS NULL`.
+
 ## Endpoints implementados
 
 ### Autenticación (públicos)
@@ -109,6 +119,13 @@ Inyección de dependencias manual en `cmd/main.go`. Las interfaces las define el
 |---|---|---|---|
 | POST | `/auth/register` | Público | Crea usuario `customer` (email obligatorio), devuelve `{ token, user }` |
 | POST | `/auth/login` | Público | Login con teléfono + password, devuelve `{ token, user }` |
+| POST | `/auth/google` | Público | Body `{ credential }` (ID token de Google). Login/registro/vinculación, devuelve `{ token, user }`. 401 token inválido o `email_verified=false` o usuario inactivo, 403 cuenta de staff, 409 conflicto de cuenta, 503 si falta `GOOGLE_CLIENT_ID` |
+
+### Mi perfil (cualquier usuario autenticado, staff incluido)
+| Método | Ruta | Quién | Descripción |
+|---|---|---|---|
+| GET | `/me` | Autenticado | `UserResponse` del usuario del token |
+| PATCH | `/me` | Autenticado | Body `{ name?, email?, phone? }`; campo ausente = no se toca. Devuelve el `UserResponse` actualizado. 400 validación, 409 email/teléfono de otro usuario |
 
 ### Spaces
 | Método | Ruta | Quién | Descripción |
@@ -324,7 +341,9 @@ Resueltos: bloqueo de canchas por fecha (implementado como booking batches de ti
    - Las tabs del login no tienen navegación con flechas del teclado (patrón ARIA tabs).
 
 ### Migraciones
-Se aplican manualmente con `psql`, en orden: `001` → `009` (`005_add_payments`, `006_add_booking_batches`, `007_add_padbol_beach_voley_types`, `008_normalize_user_email`, `009_add_confirmation_email_sent_at`).
+Se aplican manualmente con `psql`, en orden: `001` → `010` (`005_add_payments`, `006_add_booking_batches`, `007_add_padbol_beach_voley_types`, `008_normalize_user_email`, `009_add_confirmation_email_sent_at`, `010_google_login`).
+
+`010` (Fase 4a) hace nullables `users.password_hash` y `users.phone`, agrega `users.google_sub VARCHAR(255) NULL UNIQUE` y el `CHECK users_login_method_chk` (contraseña o `google_sub`). Funciona con datos existentes (todas las filas tienen `password_hash`). Va en una transacción; correrla con `psql -v ON_ERROR_STOP=1 -f backend/migrations/010_google_login.sql`. Hay que aplicarla **antes** de deployar el backend de la 4a: sin la columna `google_sub`, todos los SELECT de usuarios fallan.
 
 `009` agrega `bookings.confirmation_email_sent_at TIMESTAMP NULL` (aditiva, funciona con datos existentes). Hay que aplicarla **antes** de deployar el backend de la Fase 3: sin la columna, el claim del mail falla (se loguea el error, pero el webhook y la confirmación de la reserva no se ven afectados).
 

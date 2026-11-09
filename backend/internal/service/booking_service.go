@@ -32,15 +32,22 @@ type SpaceRepoForBooking interface {
 	GetByID(ctx context.Context, id int64) (*domain.Space, error)
 }
 
+// BookingUserLookup is what the booking service needs from users: to check
+// that the customer has a phone before letting them book.
+type BookingUserLookup interface {
+	FindByID(ctx context.Context, id int64) (*domain.User, error)
+}
+
 type BookingService struct {
 	repo       BookingRepo
 	spaceRepo  SpaceRepoForBooking
+	userRepo   BookingUserLookup
 	holdTTL    time.Duration
 	depositPct float64
 }
 
-func NewBookingService(repo BookingRepo, spaceRepo SpaceRepoForBooking, holdTTL time.Duration, depositPct float64) *BookingService {
-	return &BookingService{repo: repo, spaceRepo: spaceRepo, holdTTL: holdTTL, depositPct: depositPct}
+func NewBookingService(repo BookingRepo, spaceRepo SpaceRepoForBooking, userRepo BookingUserLookup, holdTTL time.Duration, depositPct float64) *BookingService {
+	return &BookingService{repo: repo, spaceRepo: spaceRepo, userRepo: userRepo, holdTTL: holdTTL, depositPct: depositPct}
 }
 
 // depositAndBalance reparte el precio total en seña + saldo, redondeando
@@ -57,6 +64,19 @@ func (s *BookingService) depositAndBalance(totalPrice float64) (deposit, balance
 func (s *BookingService) Create(ctx context.Context, customerUserID int64, spaceID, slotID int64, date time.Time) (*domain.Booking, error) {
 	if date.Before(argToday()) {
 		return nil, ErrInvalidBookingDate
+	}
+
+	// Accounts created with Google may have no phone yet; the venue needs one
+	// to reach the customer.
+	customer, err := s.userRepo.FindByID(ctx, customerUserID)
+	if err != nil {
+		return nil, fmt.Errorf("BookingService.Create: %w", err)
+	}
+	if customer == nil {
+		return nil, ErrSessionUserNotFound
+	}
+	if customer.Phone == nil {
+		return nil, ErrProfilePhoneMissing
 	}
 
 	space, err := s.spaceRepo.GetByID(ctx, spaceID)

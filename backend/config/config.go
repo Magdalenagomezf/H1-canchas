@@ -26,6 +26,8 @@ type Config struct {
 	ResendAPIKey string // vacío = los mails solo se loguean
 	EmailFrom    string
 	FrontendURL  string
+
+	GoogleClientID string // vacío = POST /auth/google responde 503
 }
 
 // Load lee el .env y arma la Config.
@@ -65,6 +67,7 @@ func Load() (*Config, error) {
 	resendAPIKey := getEnv("RESEND_API_KEY", "")
 	emailFrom := getEnv("EMAIL_FROM", "H1 Canchas <onboarding@resend.dev>")
 	frontendURL := getEnv("FRONTEND_URL", "http://localhost:5173")
+	googleClientID := getEnv("GOOGLE_CLIENT_ID", "")
 
 	// Railway provee DATABASE_URL completa; en local se arma desde variables separadas.
 	var dsn string
@@ -101,6 +104,8 @@ func Load() (*Config, error) {
 		ResendAPIKey: resendAPIKey,
 		EmailFrom:    emailFrom,
 		FrontendURL:  frontendURL,
+
+		GoogleClientID: googleClientID,
 	}, nil
 }
 

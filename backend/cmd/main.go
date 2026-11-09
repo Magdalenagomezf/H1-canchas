@@ -14,10 +14,30 @@ import (
 	"H1-canchas/internal/service"
 	"H1-canchas/pkg/database"
 	"H1-canchas/pkg/email"
+	"H1-canchas/pkg/google"
 	"H1-canchas/pkg/mercadopago"
 
 	"github.com/gin-gonic/gin"
 )
+
+// googleVerifierAdapter adapts pkg/google (which must not import internal/)
+// to the service.GoogleTokenVerifier port.
+type googleVerifierAdapter struct {
+	verifier *google.Verifier
+}
+
+func (a googleVerifierAdapter) Verify(ctx context.Context, credential string) (*service.GoogleIdentity, error) {
+	identity, err := a.verifier.Verify(ctx, credential)
+	if err != nil {
+		return nil, err
+	}
+	return &service.GoogleIdentity{
+		Sub:           identity.Sub,
+		Email:         identity.Email,
+		EmailVerified: identity.EmailVerified,
+		Name:          identity.Name,
+	}, nil
+}
 
 // bookingExpirySweeper es el subconjunto de BookingRepository que necesita
 // el sweep de background para liberar holds de reservas 'pending' vencidas.
@@ -59,7 +79,14 @@ func main() {
 	defer db.Close()
 
 	userRepo := repository.NewUserRepository(db)
-	userService := service.NewUserService(userRepo, cfg.JWTSecret)
+	// A nil verifier (no GOOGLE_CLIENT_ID) makes POST /auth/google answer 503.
+	var googleVerifier service.GoogleTokenVerifier
+	if cfg.GoogleClientID == "" {
+		log.Println("GOOGLE_CLIENT_ID no configurada: POST /auth/google responderá 503")
+	} else {
+		googleVerifier = googleVerifierAdapter{verifier: google.NewVerifier(cfg.GoogleClientID)}
+	}
+	userService := service.NewUserService(userRepo, cfg.JWTSecret, googleVerifier)
 	authCtrl := controllers.NewAuthController(userService)
 
 	spaceRepo := repository.NewSpaceRepository(db)
@@ -73,7 +100,7 @@ func main() {
 
 	bookingRepo := repository.NewBookingRepository(db)
 	holdTTL := time.Duration(cfg.BookingHoldTTLMinutes) * time.Minute
-	bookingService := service.NewBookingService(bookingRepo, spaceRepo, holdTTL, cfg.DepositPercentage)
+	bookingService := service.NewBookingService(bookingRepo, spaceRepo, userRepo, holdTTL, cfg.DepositPercentage)
 	bookingCtrl := controllers.NewBookingController(bookingService)
 
 	sweepInterval := time.Duration(cfg.BookingExpirySweepIntervalMinutes) * time.Minute
@@ -114,6 +141,7 @@ func main() {
 	{
 		auth.POST("/register", authCtrl.Register)
 		auth.POST("/login", authCtrl.Login)
+		auth.POST("/google", authCtrl.GoogleLogin)
 	}
 
 	r.GET("/health", func(c *gin.Context) {
@@ -134,6 +162,9 @@ func main() {
 	protected := r.Group("/")
 	protected.Use(middleware.Auth(cfg.JWTSecret))
 	{
+		// Any authenticated user, staff included.
+		protected.GET("/me", authCtrl.GetMe)
+		protected.PATCH("/me", authCtrl.UpdateMe)
 		protected.GET("/admin/users", middleware.RequireRole(domain.RoleAdmin), authCtrl.ListUsers)
 		protected.POST("/admin/users", middleware.RequireRole(domain.RoleAdmin), authCtrl.CreateStaff)
 		protected.PATCH("/admin/users/:id/role", middleware.RequireRole(domain.RoleAdmin), authCtrl.UpdateRole)

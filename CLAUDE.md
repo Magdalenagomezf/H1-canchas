@@ -52,7 +52,7 @@ cd frontend && npm run dev
 cd frontend && npm run build
 ```
 
-There is no migration runner wired into the app — migrations in `backend/migrations/` must be applied manually against the PostgreSQL database (e.g. with `psql`). Run them in order (001 → 009).
+There is no migration runner wired into the app — migrations in `backend/migrations/` must be applied manually against the PostgreSQL database (e.g. with `psql`). Run them in order (001 → 010).
 
 ## Environment
 
@@ -60,7 +60,7 @@ There is no migration runner wired into the app — migrations in `backend/migra
 
 - Required: `JWT_SECRET`, `MP_ACCESS_TOKEN`, `MP_WEBHOOK_SECRET`, `MP_WEBHOOK_URL`.
 - Database: either `DATABASE_URL` (full connection string, takes precedence) or `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`.
-- Optional (with defaults): `PORT` (`8080`), `ALLOWED_ORIGIN` (`http://localhost:5173`), `BOOKING_HOLD_TTL_MINUTES` (`20`), `DEPOSIT_PERCENTAGE` (`0.15`), `BOOKING_EXPIRY_SWEEP_INTERVAL_MINUTES` (`2`), `FRONTEND_URL` (`http://localhost:5173`, used for links in emails), `EMAIL_FROM` (`H1 Canchas <onboarding@resend.dev>`), `RESEND_API_KEY` (default empty: emails are only logged — recipient and subject — and never sent).
+- Optional (with defaults): `PORT` (`8080`), `ALLOWED_ORIGIN` (`http://localhost:5173`), `BOOKING_HOLD_TTL_MINUTES` (`20`), `DEPOSIT_PERCENTAGE` (`0.15`), `BOOKING_EXPIRY_SWEEP_INTERVAL_MINUTES` (`2`), `FRONTEND_URL` (`http://localhost:5173`, used for links in emails), `EMAIL_FROM` (`H1 Canchas <onboarding@resend.dev>`), `RESEND_API_KEY` (default empty: emails are only logged — recipient and subject — and never sent), `GOOGLE_CLIENT_ID` (OAuth Web client ID for Google login; default empty: `POST /auth/google` answers 503 and the rest of the app works).
 
 **Frontend:** `frontend/.env` already contains `VITE_API_URL=http://localhost:8080`. Adjust if needed.
 
@@ -77,9 +77,11 @@ The app is a REST API (Gin) for booking sports courts ("canchas") and event spac
 - `internal/dto/` — request/response structs used only in the controller layer.
 - `internal/middleware/` — `Auth(jwtSecret)` validates the Bearer token and sets `user_id`/`role` in the Gin context. `RequireRole(...)` gates routes by role.
 - `config/` — loads `.env` into a `Config` struct passed to everything that needs it.
-- `pkg/` — shared utilities: `pkg/jwt.go` (token generation/parsing), `pkg/database/postgres.go` (DB connection), `pkg/mercadopago/` (Checkout Pro client, preferences, payment lookup, webhook signature verification).
+- `pkg/` — shared utilities: `pkg/google/` (Google ID token verifier, via `idtoken`), `pkg/jwt.go` (token generation/parsing), `pkg/database/postgres.go` (DB connection), `pkg/mercadopago/` (Checkout Pro client, preferences, payment lookup, webhook signature verification).
 
 **Auth model:** JWT, HS256, 24-hour expiry. Claims carry `user_id` and `role`. Three roles: `customer`, `receptionist`, `admin`.
+
+**Google login:** `POST /auth/google` takes a Google ID token, finds the user by `google_sub`, links an existing `customer` with the same email, or creates a `customer` with `phone = NULL` and `password_hash = NULL`. Staff accounts are never linked (403). `users.phone`, `users.password_hash` and `users.google_sub` are nullable (`*string` in `domain.User`); a CHECK guarantees at least a password or a `google_sub`. Booking online requires a phone (`ErrProfilePhoneMissing`, HTTP 422 with `code: "phone_required"`); users set it with `PATCH /me`.
 
 **Booking model:** A `Booking` can be created by a registered user (`CustomerUserID` set) or manually by staff (`CustomerUserID` nil, `CustomerName`/`CustomerPhone` set). A unique partial index on `(space_id, slot_id, booking_date)` WHERE `status IN ('pending','confirmed')` enforces availability at the DB level. Services also check availability before inserting, but the DB index is the final guard.
 
@@ -90,8 +92,8 @@ Online bookings start as `pending` with a hold (`expires_at`, default 20 min) to
 **Booking batches:** staff can create recurring weekly bookings (`recurring_teacher`) or maintenance blocks (`maintenance`). Both materialize real `confirmed` bookings tagged with `batch_id` (max range 366 days); already-taken dates are skipped. Cancelling a batch cancels only today's and future bookings.
 
 **Route access summary:**
-- Public: `GET /health`, `GET /spaces`, `GET /spaces/:id`, `GET /spaces/:id/slots`, `POST /payments/webhook`
-- Any authenticated user: `POST /bookings`, `GET /bookings` (own bookings), `GET /bookings/:id`, `PATCH /bookings/:id/cancel`, `POST /bookings/:id/payments`
+- Public: `GET /health`, `GET /spaces`, `GET /spaces/:id`, `GET /spaces/:id/slots`, `POST /payments/webhook`, `POST /auth/register`, `POST /auth/login`, `POST /auth/google`
+- Any authenticated user: `GET /me`, `PATCH /me`, `POST /bookings`, `GET /bookings` (own bookings), `GET /bookings/:id`, `PATCH /bookings/:id/cancel`, `POST /bookings/:id/payments`
 - Receptionist: `PUT /spaces/:id`, `GET /admin/bookings`, `POST /bookings/manual`, `POST /bookings/recurring`, `POST /bookings/block`, `GET /bookings/batches`, `PATCH /bookings/batches/:id/cancel`, `PATCH /bookings/:id/payment`
 - Admin: all of the above + `POST /spaces`, `POST /spaces/:id/slots`, `DELETE /spaces/:id`, `DELETE /admin/spaces/:id`, `GET/POST /admin/users`, `PATCH /admin/users/:id/role`, `DELETE /admin/users/:id`
 

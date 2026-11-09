@@ -38,8 +38,8 @@ Orden decidido (2026-11-09): primero CI, después QA y PROD. Modelo: Continuous 
 - [ ] Apagar el auto-deploy de los proveedores: solo el pipeline publica, y siempre el commit que se verificó.
 - [ ] Pipeline: merge a `main` → CI verde → deploy a QA → smoke → E2E contra QA → **pausa esperando aprobación** (environment `production` de GitHub, con los secrets de PROD solo ahí) → deploy a PROD → smoke.
 - [ ] Si fallan el smoke o los E2E de QA, PROD queda salteado y ni pide aprobación.
-- [ ] `/health` devuelve el commit que está corriendo.
-- [ ] Smoke test después de cada deploy: la app responde y con el commit esperado (no solo "está viva"). Con reintentos por el cold start.
+- [x] `/health` devuelve el commit que está corriendo (y ahora sí consulta la base: 503 si no responde). Hecho el 2026-11-09.
+- [ ] Smoke test después de cada deploy (script `scripts/smoke.sh` hecho el 2026-11-09 y probado en el CI contra un build local; falta engancharlo al deploy): la app responde y con el commit esperado (no solo "está viva"). Con reintentos por el cold start.
 - [ ] Documentar cómo se pasa un cambio de QA a PROD y cómo se vuelve atrás (rollback).
 
 Si se cambia de proveedor, el CI, los tests y el proceso sobreviven enteros; se rehace solo el paso de deploy, las variables y la migración de la base (`pg_dump`/`pg_restore`). Con dominio propio, las URLs de Google, Mercado Pago y CORS no cambian.

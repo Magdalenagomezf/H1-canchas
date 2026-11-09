@@ -5,7 +5,8 @@
 #
 # Passes when:
 #   1. GET /health answers 200 (API up and database reachable), and
-#   2. its "commit" matches expected_commit (prefix match, so a short SHA works), and
+#   2. its "commit" matches expected_commit (prefix match, so a short SHA works;
+#      a "-dirty" build never matches), and
 #   3. GET /spaces answers 200 (a real query through the whole stack).
 #
 # Retries /health to absorb cold starts and rollouts that still serve the old
@@ -30,7 +31,7 @@ healthy=false
 for ((i = 1; i <= ATTEMPTS; i++)); do
   status="$(get /health)"
   commit="$(grep -o '"commit":"[^"]*"' "$body_file" | cut -d'"' -f4 || true)"
-  if [[ "$status" == "200" && ( -z "$EXPECTED" || "$commit" == "$EXPECTED"* ) ]]; then
+  if [[ "$status" == "200" && ( -z "$EXPECTED" || ( "$commit" == "$EXPECTED"* && "$commit" != *-dirty ) ) ]]; then
     healthy=true
     break
   fi

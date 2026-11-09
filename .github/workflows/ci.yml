@@ -46,6 +46,28 @@ jobs:
         env:
           REQUIRE_DB: "1"
         run: go test -race ./...
+      - name: Apply migrations for the smoke test
+        env:
+          PGPASSWORD: postgres
+        run: |
+          for f in migrations/*.sql; do
+            psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -q -f "$f"
+          done
+      - name: Smoke test against a local build
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
+          JWT_SECRET: ci-only
+          MP_ACCESS_TOKEN: ci-only
+          MP_WEBHOOK_SECRET: ci-only
+          MP_WEBHOOK_URL: http://localhost/payments/webhook
+          PORT: "8080"
+        run: |
+          # Build by package (./cmd, not ./cmd/main.go) so Go embeds the git commit.
+          # Output goes outside the checkout so it does not mark the build as -dirty.
+          go build -o "$RUNNER_TEMP/h1-canchas" ./cmd
+          "$RUNNER_TEMP/h1-canchas" > "$RUNNER_TEMP/server.log" 2>&1 &
+          SMOKE_DELAY_SECONDS=2 ../scripts/smoke.sh http://localhost:8080 "$GITHUB_SHA" \
+            || { cat "$RUNNER_TEMP/server.log"; exit 1; }
 
   frontend:
     name: Frontend (lint + build)

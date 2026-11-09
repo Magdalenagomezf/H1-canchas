@@ -13,8 +13,8 @@ export interface SpaceSlot {
   id: number;
   label: string;
   description: string | null;
-  start_time: string | null;
-  end_time: string | null;
+  start_time?: string | null; // omitted by the API when the slot has no time
+  end_time?: string | null;
   available?: boolean;
 }
 
@@ -29,8 +29,8 @@ export interface BookingSpaceInfo {
 export interface BookingSlotInfo {
   id: number;
   label: string;
-  start_time: string | null;
-  end_time: string | null;
+  start_time?: string | null; // omitted by the API when the slot has no time
+  end_time?: string | null;
 }
 
 export interface BookingCustomerInfo {

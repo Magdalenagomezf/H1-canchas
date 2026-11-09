@@ -36,7 +36,13 @@ Orden decidido (2026-11-09): primero CI, después QA y PROD. Modelo: Continuous 
 - [ ] Entorno QA: base propia (otro proyecto de base), backend, frontend, credenciales de **prueba** de Mercado Pago, origen de QA en Google Cloud.
 - [ ] Entorno PROD: base propia, credenciales reales.
 - [ ] Apagar el auto-deploy de los proveedores: solo el pipeline publica, y siempre el commit que se verificó.
-- [ ] Pipeline: merge a `main` → CI verde → deploy a QA → smoke → E2E contra QA → **pausa esperando aprobación** (environment `production` de GitHub, con los secrets de PROD solo ahí) → deploy a PROD → smoke.
+- [ ] Pipeline con las etapas del modelo de Mallki (TP6/TP7), en este orden:
+  1. **Build + tests** (CI, en cada PR y en `main`): build del backend y del frontend, lint, tests unitarios (service, controllers, Vitest) y tests de la base (repository contra un Postgres descartable; no pueden correr contra QA porque borran y recrean la base).
+  2. **Deploy a QA** del commit que pasó la etapa 1.
+  3. **Integración contra QA**: smoke test (la app responde, la base está conectada y corre el commit esperado). Si hace falta, sumar pruebas de API contra QA.
+  4. **E2E contra QA** con Playwright.
+  5. **Aprobación manual** (environment `production` de GitHub, con los secrets de PROD solo ahí).
+  6. **Deploy a PROD** + smoke.
 - [ ] Si fallan el smoke o los E2E de QA, PROD queda salteado y ni pide aprobación.
 - [x] `/health` devuelve el commit que está corriendo (y ahora sí consulta la base: 503 si no responde). Hecho el 2026-11-09.
 - [ ] Smoke test después de cada deploy (script `scripts/smoke.sh` hecho el 2026-11-09 y probado en el CI contra un build local; falta engancharlo al deploy): la app responde y con el commit esperado (no solo "está viva"). Con reintentos por el cold start.
@@ -128,7 +134,8 @@ D6 decidido (2026-11-09): las dos cosas, lo legal y lo técnico. Checklist armad
 - [x] Arreglar los errores de lint que ya existían (eran 11). Hecho el 2026-11-09 (PR #1).
 - [x] Tests unitarios del frontend con **Vitest**, solo de lógica pura (no pantallas). Hecho el 2026-11-09: fechas y horas en `src/lib/dates.ts` y perfil en `src/lib/profile.ts`, corren en el CI.
 - [x] E2E con **Playwright** (2026-11-09): entrar (y contraseña incorrecta), registrarse y reservar hasta llegar a Mercado Pago, reserva manual desde el panel. Corren en el CI contra un entorno descartable; cada test crea y limpia sus datos. Ya encontraron un bug: un turno sin horario dejaba en blanco la página de la cancha.
-- [ ] Apuntar los mismos E2E a QA cuando exista (cambian solo `E2E_BASE_URL`, `E2E_API_URL` y el admin de QA en secrets). Más adelante, el cierre de caja.
+- [ ] Apuntar los mismos E2E a QA cuando exista (etapa 4 del pipeline; cambian solo `E2E_BASE_URL`, `E2E_API_URL` y el admin de QA en secrets). Más adelante, el cierre de caja.
+- [ ] Decidir al armar QA si el E2E local del CI se mantiene (agarra errores antes de mergear) o se saca para quedar igual al modelo de Mallki (E2E solo contra QA).
 - [ ] Revisar que los tests del backend sigan cubriendo lo nuevo (hoy: service 82%, controllers 45%, repository 63%).
 - [ ] Verificar mobile (375px y 768px).
 - [ ] Probar el panel a mano (reserva manual, turno fijo, bloqueo, cancelar) y el flujo de reserva hasta el pago.

@@ -221,6 +221,12 @@ Si dos requests llegan al mismo tiempo, el primero inserta y el segundo falla en
 - Solo el admin crea espacios (decisión de negocio: el recepcionista no puede dar de alta canchas).
 - Turnos fijos y bloqueos **materializan reservas reales** en vez de guardar una regla recurrente evaluada en tiempo real. Así la protección contra doble reserva (índice único) funciona sin cambios y no hace falta un cron. El costo es el límite de 366 días por batch.
 
+### Épica "Mail y cuentas" (cerrada el 2026-11-09)
+- **Sin mail en reservas manuales** (era la Fase 2; se descartó el 2026-10-02). En una reserva manual el cliente ya arregló todo con el recepcionista, casi siempre por WhatsApp o teléfono, así que un mail de confirmación no le suma nada. Pedirle el email haría más lenta la carga y agregaría errores de tipeo. Si en el futuro hace falta (por ejemplo, para los recordatorios de "Avisos al cliente"), se agrega una columna `customer_email` en `bookings` que acepte `NULL`, sin tocar los datos existentes.
+- **Los clientes cargados a mano no se convierten en usuarios.** Siguen como nombre y teléfono en la reserva.
+- **No se permite "reclamar" reservas manuales por teléfono** hasta que exista verificación por SMS.
+- **Riesgo aceptado (revisar más adelante): vinculación automática de Google por email.** El email del registro con teléfono no se verifica. Alguien puede registrarse con el email de otra persona y su propia contraseña; cuando la persona real entra con Google, la cuenta se vincula y el atacante, que sigue sabiendo la contraseña, ve sus reservas. Opciones para cerrarlo: (A) al vincular, borrar `password_hash`; (B) no vincular automáticamente y hacerlo desde "Mi perfil" con la sesión iniciada; (C) verificar el email al registrarse. Se acepta por ahora por el bajo valor de los datos expuestos.
+
 ---
 
 ## Estado del frontend
@@ -341,6 +347,9 @@ Resueltos: bloqueo de canchas por fecha (implementado como booking batches de ti
    - En el menú mobile de la landing (Sheet en portal), el foco con teclado sale con el outline verde global en vez del claro.
    - Las tabs del login no tienen navegación con flechas del teclado (patrón ARIA tabs).
 
+### Próxima épica: "Avisos al cliente"
+Recordatorios de la reserva y mails de cancelación y de vencimiento del hold. Reusa el `EmailSender` de `pkg/email` (el mismo del mail de confirmación).
+
 ### Migraciones
 Se aplican manualmente con `psql`, en orden: `001` → `010` (`005_add_payments`, `006_add_booking_batches`, `007_add_padbol_beach_voley_types`, `008_normalize_user_email`, `009_add_confirmation_email_sent_at`, `010_google_login`).
 
@@ -359,6 +368,16 @@ Los teléfonos ya guardados están en el formato en que se cargaron y `Login` ah
 4. Revisar la salida y correr `go run ./cmd/normalize-phones --apply`.
 
 El comando usa la misma config/DB que el servidor. Los teléfonos que no se pueden normalizar y los usuarios que chocarían quedan sin tocar y hay que resolverlos a mano. Ignora el `-` de los bloqueos de mantenimiento.
+
+### Deploy de "Mail y cuentas" (mail de confirmación + login con Google)
+Todo funciona en local; en producción falta:
+
+1. **Migraciones** `009` y `010`, en orden, **antes** de deployar el backend (ver "Migraciones").
+2. **Teléfonos:** si la Fase 1 todavía no se deployó, seguir el orden de "Deploy de la Fase 1", incluido `normalize-phones --apply`.
+3. **Variables del backend:** `RESEND_API_KEY`, `EMAIL_FROM`, `FRONTEND_URL` y `GOOGLE_CLIENT_ID`.
+4. **Variable del frontend:** `VITE_GOOGLE_CLIENT_ID`, con el mismo valor que `GOOGLE_CLIENT_ID`. Vite la toma en el build.
+5. **Resend:** verificar un dominio propio y usarlo en `EMAIL_FROM`. Con el remitente de prueba `onboarding@resend.dev` los mails caen en spam y solo llegan al dueño de la cuenta.
+6. **Google Cloud** (OAuth Client ID de tipo *Web application*): agregar el dominio de producción en "Orígenes de JavaScript autorizados" y **publicar la app**. Mientras esté en modo *Prueba*, solo pueden entrar los usuarios de prueba cargados en la consola.
 
 ---
 

@@ -65,6 +65,8 @@ cd frontend && E2E_BASE_URL=http://localhost:5173 E2E_API_URL=http://localhost:8
 
 CI (`.github/workflows/ci.yml`) runs on every PR and push to `main`: backend `go vet`, `go build` and `go test -race` against a Postgres 16 service (with `REQUIRE_DB=1`, so the repository integration tests fail instead of skipping when the database is missing), a smoke test (`scripts/smoke.sh`) against a fresh build that must report the PR's commit, frontend `npm run lint`, `npm test` and `npm run build`, and the Playwright E2E tests against a throwaway stack (Postgres + backend + `vite preview`, seeded with `frontend/e2e/ci-seed.sql`). The E2E answer the Mercado Pago preference call themselves, because CI has no MP credentials. Run the same checks locally before pushing.
 
+Deploys go only through `.github/workflows/deploy.yml`, triggered when CI passes on `main`: deploy to QA → smoke → E2E against QA → manual approval (GitHub environment `production`) → deploy to PROD → smoke. Each run deploys the commit CI verified (Render deploy hook with `ref=<sha>`, Vercel CLI from a checkout of that commit); provider auto-deploys are off. Setup, migrations, promotion and rollback: `docs/DEPLOY.md`.
+
 There is no migration runner wired into the app — migrations in `backend/migrations/` must be applied manually against the PostgreSQL database (e.g. with `psql`). Run them in order (001 → 010).
 
 ## Environment
@@ -105,7 +107,7 @@ Online bookings start as `pending` with a hold (`expires_at`, default 20 min) to
 **Booking batches:** staff can create recurring weekly bookings (`recurring_teacher`) or maintenance blocks (`maintenance`). Both materialize real `confirmed` bookings tagged with `batch_id` (max range 366 days); already-taken dates are skipped. Cancelling a batch cancels only today's and future bookings.
 
 **Route access summary:**
-- Public: `GET /health` (pings the database: 200 `{status, db, commit}`, or 503 when the database is unreachable; `commit` comes from `APP_COMMIT` or the git revision embedded at build time, `unknown` under `go run`), `GET /spaces`, `GET /spaces/:id`, `GET /spaces/:id/slots`, `POST /payments/webhook`, `POST /auth/register`, `POST /auth/login`, `POST /auth/google`
+- Public: `GET /health` (pings the database: 200 `{status, db, commit}`, or 503 when the database is unreachable; `commit` comes from `APP_COMMIT`, then `RENDER_GIT_COMMIT` (set by Render), then the git revision embedded at build time, `unknown` under `go run`), `GET /spaces`, `GET /spaces/:id`, `GET /spaces/:id/slots`, `POST /payments/webhook`, `POST /auth/register`, `POST /auth/login`, `POST /auth/google`
 - Any authenticated user: `GET /me`, `PATCH /me`, `POST /bookings`, `GET /bookings` (own bookings), `GET /bookings/:id`, `PATCH /bookings/:id/cancel`, `POST /bookings/:id/payments`
 - Receptionist: `PUT /spaces/:id`, `GET /admin/bookings`, `POST /bookings/manual`, `POST /bookings/recurring`, `POST /bookings/block`, `GET /bookings/batches`, `PATCH /bookings/batches/:id/cancel`, `PATCH /bookings/:id/payment`
 - Admin: all of the above + `POST /spaces`, `POST /spaces/:id/slots`, `DELETE /spaces/:id`, `DELETE /admin/spaces/:id`, `GET/POST /admin/users`, `PATCH /admin/users/:id/role`, `DELETE /admin/users/:id`

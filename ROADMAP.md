@@ -14,7 +14,7 @@ Cómo se usa este archivo:
 
 | # | Decisión | Afecta a |
 |---|----------|----------|
-| D1 | **Servidores para producción:** seguir en planes gratuitos o pasar a pagos. Los gratuitos suelen "dormirse" sin uso (la primera carga tarda y puede demorar el aviso de pago de Mercado Pago) y tienen límites de base de datos y backups. **Se decide 2 o 3 semanas antes de inaugurar** (2026-11-09): CI, QA y el pipeline se arman en los planes gratuitos; lo que conviene pagar es PROD. | E3, E4 |
+| D1 | **Servidores para producción:** seguir en planes gratuitos o pasar a pagos. Los gratuitos suelen "dormirse" sin uso (la primera carga tarda y puede demorar el aviso de pago de Mercado Pago) y tienen límites de base de datos y backups. **Se decide 2 o 3 semanas antes de inaugurar** (2026-11-09): CI, QA y el pipeline se arman en los planes gratuitos; lo que conviene pagar es PROD. **Pasó el 2026-11-10:** Supabase pausó la base de QA tras una semana sin uso y el sitio dejó de funcionar hasta reanudarla a mano desde el dashboard (los datos no se pierden). En PROD eso dejaría la app caída sin aviso. | E3, E4 |
 | D3 | **Cuenta de Mercado Pago del negocio** y **política de cancelación y devolución de la seña.** Propuesta (2026-11-09), **a validar con el cliente**: para inaugurar, nivel 1 (abajo). Opción a ofrecerle: devolución si se cancela con más de 24 h. Revisar si aplica la normativa de defensa del consumidor (p. ej. "botón de arrepentimiento") a una reserva con fecha fija. | E4 |
 | D9 | **Precios por horario y días especiales** (a hablar con el cliente): ¿cobran distinto de noche (por la luz) o los fines de semana? ¿Hay feriados o días cerrados? Hoy cada cancha tiene un solo precio y todos los turnos abren todos los días. Si aplica, se crea una épica. | — |
 | D10 | **Porcentaje de la seña** (a hablar con el cliente): hoy es 15% (`DEPOSIT_PERCENTAGE`), un valor puesto por defecto. | E4 |
@@ -33,10 +33,10 @@ Orden decidido (2026-11-09): primero CI, después QA y PROD. Modelo: Continuous 
 
 **Entornos** (D2 decidido el 2026-11-09: pipeline en GitHub Actions, como en Mallki):
 - [ ] Decidir D1.
-- [ ] Entorno QA: base propia (otro proyecto de base), backend, frontend, credenciales de **prueba** de Mercado Pago, origen de QA en Google Cloud.
-- [ ] Entorno PROD: base propia, credenciales reales.
-- [ ] Apagar el auto-deploy de los proveedores: solo el pipeline publica, y siempre el commit que se verificó.
-- [ ] Pipeline con las etapas del modelo de Mallki (TP6/TP7), en este orden:
+- [ ] Entorno QA: decidido el 2026-11-10 que **lo que ya estaba publicado pasa a ser QA** (tiene datos de prueba). Faltan sus secrets en GitHub (ver `docs/DEPLOY.md`).
+- [ ] Entorno PROD: se crea ahora en planes gratuitos aunque después se mude por D1 (decidido el 2026-11-10). Arranca con credenciales de **prueba** de Mercado Pago, en una aplicación de MP propia, hasta decidir D3. Pasos en `docs/DEPLOY.md`.
+- [ ] Apagar el auto-deploy de los proveedores: solo el pipeline publica, y siempre el commit que se verificó (Render con `ref=<sha>` en el deploy hook, Vercel con su CLI desde el checkout del commit; `vercel.json` apaga los deploys por Git).
+- [ ] Pipeline (`.github/workflows/deploy.yml`, armado el 2026-11-10; falta configurar los entornos y probarlo) con las etapas del modelo de Mallki (TP6/TP7), en este orden:
   1. **Build + tests** (CI, en cada PR y en `main`): build del backend y del frontend, lint, tests unitarios (service, controllers, Vitest) y tests de la base (repository contra un Postgres descartable; no pueden correr contra QA porque borran y recrean la base).
   2. **Deploy a QA** del commit que pasó la etapa 1.
   3. **Integración contra QA**: smoke test (la app responde, la base está conectada y corre el commit esperado). Si hace falta, sumar pruebas de API contra QA.
@@ -45,8 +45,9 @@ Orden decidido (2026-11-09): primero CI, después QA y PROD. Modelo: Continuous 
   6. **Deploy a PROD** + smoke.
 - [ ] Si fallan el smoke o los E2E de QA, PROD queda salteado y ni pide aprobación.
 - [x] `/health` devuelve el commit que está corriendo (y ahora sí consulta la base: 503 si no responde). Hecho el 2026-11-09.
-- [ ] Smoke test después de cada deploy (script `scripts/smoke.sh` hecho el 2026-11-09 y probado en el CI contra un build local; falta engancharlo al deploy): la app responde y con el commit esperado (no solo "está viva"). Con reintentos por el cold start.
-- [ ] Documentar cómo se pasa un cambio de QA a PROD y cómo se vuelve atrás (rollback).
+- [ ] Smoke test después de cada deploy (script `scripts/smoke.sh` hecho el 2026-11-09; enganchado al deploy el 2026-11-10, falta verlo correr contra QA y PROD): la app responde y con el commit esperado (no solo "está viva"). Con reintentos por el cold start.
+- [ ] **Keep-alive** mientras QA o PROD estén en planes gratuitos: workflow programado en GitHub que llame a `/health` cada pocos días (despierta Render y hace una consulta real a Supabase), para que la base no se pause por inactividad. Motivo: pausa de QA del 2026-11-10 (ver D1). Si se pasa PROD a pago (D1), sigue sirviendo para QA.
+- [x] Documentar cómo se pasa un cambio de QA a PROD y cómo se vuelve atrás (rollback): `docs/DEPLOY.md` (2026-11-10).
 
 Si se cambia de proveedor, el CI, los tests y el proceso sobreviven enteros; se rehace solo el paso de deploy, las variables y la migración de la base (`pg_dump`/`pg_restore`). Con dominio propio, las URLs de Google, Mercado Pago y CORS no cambian.
 

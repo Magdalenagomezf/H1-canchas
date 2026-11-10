@@ -10,9 +10,9 @@ merge a main → CI verde → deploy a QA → smoke → E2E contra QA
 ```
 
 - **Solo el pipeline publica.** Render y Vercel tienen el deploy automático apagado. Si algo no pasó por el pipeline, no está publicado.
-- **Siempre el commit verificado.** Cada corrida queda atada al commit del merge que la disparó. Render recibe ese commit en el deploy hook (`?ref=<sha>`) y Vercel construye el frontend desde un checkout de ese mismo commit. Nunca se publica "lo último de `main`".
+- **Siempre el commit verificado.** Cada corrida queda atada al commit del merge que la disparó. Render recibe ese commit en el deploy hook (parámetro `ref=<sha>`) y Vercel construye el frontend desde un checkout de ese mismo commit. Nunca se publica "lo último de `main`".
 - **Si QA falla, PROD ni se ofrece.** Si el smoke o los E2E de QA fallan, el job de PROD no arranca y no pide aprobación.
-- **No se vuelve atrás por accidente.** Si una corrida vieja se aprueba tarde y PROD ya corre un commit más nuevo, el deploy se rechaza.
+- **No se vuelve atrás por accidente.** Si una corrida vieja se aprueba tarde y PROD ya corre un commit más nuevo, el deploy se rechaza. Es un control de mejor esfuerzo: si el backend de PROD no responde o informa un commit desconocido, el deploy sigue (es la forma de arreglar un PROD caído).
 
 Archivos: `.github/workflows/deploy.yml` (las etapas), `.github/actions/deploy/action.yml` (deploy de un entorno + smoke) y `scripts/smoke.sh`.
 
@@ -31,7 +31,7 @@ Hacela **antes de mergear el PR que agrega el pipeline**. Ese merge dispara el p
    En Settings → Build & Deploy, poné **Auto-Deploy: Off**.
 2. **Vercel (frontend QA):** Settings → General → copiá el **Project ID**. En Settings de tu cuenta o equipo, copiá el **Team ID** (o el ID de la cuenta personal): es el `VERCEL_ORG_ID`.
 3. **Token de Vercel:** Account Settings → Tokens → creá uno (por ejemplo `github-deploy`). Sirve para los dos entornos.
-4. **Admin para los E2E:** desde el panel de QA, creá un usuario `admin` solo para los tests (por ejemplo "E2E Admin"), con una contraseña larga y aleatoria. Los tests lo usan para crear y borrar sus propios datos.
+4. **Admin para los E2E:** desde el panel de QA, creá un usuario `admin` solo para los tests (por ejemplo "E2E Admin"), con una contraseña larga y aleatoria. Los tests lo usan para crear y borrar sus propios datos. Si un E2E falla a mitad de camino, puede dejar datos sueltos en QA.
 
 ### 2. PROD (servicios nuevos)
 

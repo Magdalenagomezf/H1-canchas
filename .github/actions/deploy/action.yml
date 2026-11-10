@@ -39,9 +39,11 @@ runs:
         SHA: ${{ inputs.sha }}
       run: |
         # ref pins the commit (https://render.com/docs/deploy-a-commit). The
-        # first pinned deploy also turns off Render's auto-deploy.
+        # first pinned deploy also turns off Render's auto-deploy. Render hooks
+        # already carry "?key=...", so ref is usually appended with "&".
         # 404 means the hook is outdated or the commit is not in the repository.
-        curl -fsS -X POST -o /dev/null "${HOOK}&ref=${SHA}"
+        sep='?'; [[ "$HOOK" == *\?* ]] && sep='&'
+        curl -fsS --retry 3 --retry-all-errors -X POST -o /dev/null "${HOOK}${sep}ref=${SHA}"
         echo "Render deploy of $SHA requested"
 
     - name: Smoke test backend

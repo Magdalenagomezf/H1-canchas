@@ -1,0 +1,117 @@
+name: Deploy
+
+# Pipeline after CI (see docs/DEPLOY.md):
+#   CI green on main → deploy QA → smoke → E2E against QA
+#   → manual approval (environment "production") → deploy PROD → smoke.
+# Every job deploys the commit CI verified (workflow_run.head_sha), never
+# "the latest of main". It lives apart from ci.yml because CI cancels
+# in-progress runs on each push, which would cancel a deploy halfway.
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  qa:
+    name: QA (deploy + smoke + E2E)
+    # Only a green CI from a push to main of this repository (not a pull request).
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    environment:
+      name: qa
+      url: ${{ vars.FRONTEND_URL }}
+    # One QA run at a time, so a newer deploy cannot land in the middle of the
+    # E2E of an older one. A newer pending run replaces an older pending one.
+    concurrency:
+      group: deploy-qa
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - uses: ./.github/actions/deploy
+        with:
+          sha: ${{ github.event.workflow_run.head_sha }}
+          render-deploy-hook-url: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          api-url: ${{ vars.API_URL }}
+          frontend-url: ${{ vars.FRONTEND_URL }}
+
+      - name: Install E2E dependencies
+        working-directory: frontend
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: E2E against QA
+        working-directory: frontend
+        env:
+          E2E_BASE_URL: ${{ vars.FRONTEND_URL }}
+          E2E_API_URL: ${{ vars.API_URL }}
+          E2E_ADMIN_PHONE: ${{ secrets.E2E_ADMIN_PHONE }}
+          E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
+        run: npm run e2e
+
+      - name: Upload E2E report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-qa-report
+          path: |
+            frontend/playwright-report
+            frontend/test-results
+          retention-days: 7
+
+  production:
+    name: PROD (deploy + smoke)
+    needs: qa
+    runs-on: ubuntu-latest
+    # Required reviewers on this environment pause the job until someone approves.
+    # PROD secrets live only here.
+    environment:
+      name: production
+      url: ${{ vars.FRONTEND_URL }}
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+
+      - name: Refuse to replace a newer commit in production
+        env:
+          API_URL: ${{ vars.API_URL }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          # An old run approved late must not roll production back.
+          current="$(curl -s -m 90 "$API_URL/health" | grep -o '"commit":"[^"]*"' | cut -d'"' -f4 || true)"
+          echo "production runs: ${current:-unknown}, deploying: $SHA"
+          if [[ -n "$current" && "$current" != "$SHA" ]] \
+            && git cat-file -e "$current^{commit}" 2>/dev/null \
+            && git merge-base --is-ancestor "$SHA" "$current"; then
+            echo "FAIL: production already runs $current, which is newer than $SHA"
+            exit 1
+          fi
+
+      - uses: ./.github/actions/deploy
+        with:
+          sha: ${{ github.event.workflow_run.head_sha }}
+          render-deploy-hook-url: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          api-url: ${{ vars.API_URL }}
+          frontend-url: ${{ vars.FRONTEND_URL }}

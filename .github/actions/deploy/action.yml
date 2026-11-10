@@ -1,0 +1,87 @@
+name: Deploy one environment
+description: >
+  Deploys one commit to an environment (backend on Render, frontend on Vercel)
+  and smoke tests it. The frontend is published only after the backend passes
+  its smoke test, so a failed backend never leaves a new frontend live against
+  the old API. Both providers receive the exact commit, never "the latest
+  of main". The caller must check out that commit first.
+
+inputs:
+  sha:
+    description: Commit to deploy (full SHA).
+    required: true
+  render-deploy-hook-url:
+    description: Render deploy hook of the environment's backend service.
+    required: true
+  vercel-token:
+    description: Vercel access token.
+    required: true
+  vercel-org-id:
+    description: Vercel team or account ID.
+    required: true
+  vercel-project-id:
+    description: Vercel project ID of the environment's frontend.
+    required: true
+  api-url:
+    description: Public URL of the environment's backend.
+    required: true
+  frontend-url:
+    description: Public URL of the environment's frontend.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Deploy backend (Render, pinned commit)
+      shell: bash
+      env:
+        HOOK: ${{ inputs.render-deploy-hook-url }}
+        SHA: ${{ inputs.sha }}
+      run: |
+        # ref pins the commit (https://render.com/docs/deploy-a-commit). The
+        # first pinned deploy also turns off Render's auto-deploy.
+        # 404 means the hook is outdated or the commit is not in the repository.
+        curl -fsS -X POST -o /dev/null "${HOOK}&ref=${SHA}"
+        echo "Render deploy of $SHA requested"
+
+    - name: Smoke test backend
+      shell: bash
+      env:
+        # Render builds the commit before switching traffic, plus the free-plan
+        # cold start: allow up to 15 minutes.
+        SMOKE_ATTEMPTS: "90"
+        SMOKE_DELAY_SECONDS: "10"
+        API_URL: ${{ inputs.api-url }}
+        SHA: ${{ inputs.sha }}
+      run: scripts/smoke.sh "$API_URL" "$SHA"
+
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 22
+
+    - name: Deploy frontend (Vercel, built from this checkout)
+      shell: bash
+      env:
+        VERCEL_TOKEN: ${{ inputs.vercel-token }}
+        VERCEL_ORG_ID: ${{ inputs.vercel-org-id }}
+        VERCEL_PROJECT_ID: ${{ inputs.vercel-project-id }}
+      run: |
+        # pull brings the project's settings and production variables
+        # (VITE_API_URL is baked into the build), build runs here and
+        # deploy --prebuilt only uploads the result.
+        npm install --global vercel@65.3.1
+        vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+        vercel build --prod --token="$VERCEL_TOKEN"
+        vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
+
+    - name: Smoke test frontend
+      shell: bash
+      env:
+        FRONTEND_URL: ${{ inputs.frontend-url }}
+      run: |
+        status="$(curl -s -o /dev/null -w '%{http_code}' -m 30 "$FRONTEND_URL" || true)"
+        if [[ "$status" != "200" ]]; then
+          echo "FAIL: frontend answered $status"
+          exit 1
+        fi
+        echo "ok: frontend 200"

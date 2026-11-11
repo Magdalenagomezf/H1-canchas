@@ -39,11 +39,11 @@ Orden decidido (2026-11-09): primero CI, después QA y PROD. Modelo: Continuous 
 - [ ] Pipeline (`.github/workflows/deploy.yml`, armado el 2026-11-10; falta configurar los entornos y probarlo) con las etapas del modelo de Mallki (TP6/TP7), en este orden:
   1. **Build + tests** (CI, en cada PR y en `main`): build del backend y del frontend, lint, tests unitarios (service, controllers, Vitest) y tests de la base (repository contra un Postgres descartable; no pueden correr contra QA porque borran y recrean la base).
   2. **Deploy a QA** del commit que pasó la etapa 1.
-  3. **Integración contra QA**: smoke test (la app responde, la base está conectada y corre el commit esperado). Si hace falta, sumar pruebas de API contra QA.
+  3. **Integración contra QA**: smoke test (la app responde, la base está conectada y corre el commit esperado) + pruebas de API sin navegador (`frontend/e2e/api.spec.ts`, `npm run test:api`): códigos de estado, permisos por rol, conflicto de reserva (409) y el contrato del JSON que lee el front. Corren antes de los E2E, en QA y también en el CI de cada PR contra el stack descartable (decidido el 2026-11-11, igual que los E2E: se quedan en el PR porque frenan un cambio roto antes de `main`).
   4. **E2E contra QA** con Playwright.
   5. **Aprobación manual** (environment `production` de GitHub, con los secrets de PROD solo ahí).
   6. **Deploy a PROD** + smoke.
-- [ ] Si fallan el smoke o los E2E de QA, PROD queda salteado y ni pide aprobación.
+- [ ] Si fallan el smoke, la integración o los E2E de QA, PROD queda salteado y ni pide aprobación.
 - [x] `/health` devuelve el commit que está corriendo (y ahora sí consulta la base: 503 si no responde). Hecho el 2026-11-09.
 - [ ] Smoke test después de cada deploy (script `scripts/smoke.sh` hecho el 2026-11-09; enganchado al deploy el 2026-11-10, falta verlo correr contra QA y PROD): la app responde y con el commit esperado (no solo "está viva"). Con reintentos por el cold start.
 - [ ] **Keep-alive** mientras QA o PROD estén en planes gratuitos: workflow programado en GitHub que llame a `/health` cada pocos días (despierta Render y hace una consulta real a Supabase), para que la base no se pause por inactividad. Motivo: pausa de QA del 2026-11-10 (ver D1). Si se pasa PROD a pago (D1), sigue sirviendo para QA.

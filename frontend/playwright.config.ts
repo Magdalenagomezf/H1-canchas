@@ -19,5 +19,10 @@ export default defineConfig({
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  projects: [
+    // API integration tests (e2e/api.spec.ts): no browser, run first with `npm run test:api`.
+    { name: 'api', testMatch: 'api.spec.ts' },
+    // Browser E2E tests: `npm run e2e`.
+    { name: 'chromium', testIgnore: 'api.spec.ts', use: { ...devices['Desktop Chrome'] } },
+  ],
 });

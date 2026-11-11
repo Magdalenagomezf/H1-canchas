@@ -5,13 +5,13 @@ Cómo se publica H1 Canchas, cómo se arma cada entorno y cómo se vuelve atrás
 ## Cómo funciona
 
 ```
-merge a main → CI verde → deploy a QA → smoke → E2E contra QA
+merge a main → CI verde → deploy a QA → smoke → integración (API) → E2E contra QA
             → aprobación manual → deploy a PROD → smoke
 ```
 
 - **Solo el pipeline publica.** Render y Vercel tienen el deploy automático apagado. Si algo no pasó por el pipeline, no está publicado.
 - **Siempre el commit verificado.** Cada corrida queda atada al commit del merge que la disparó. Render recibe ese commit en el deploy hook (parámetro `ref=<sha>`) y Vercel construye el frontend desde un checkout de ese mismo commit. Nunca se publica "lo último de `main`".
-- **Si QA falla, PROD ni se ofrece.** Si el smoke o los E2E de QA fallan, el job de PROD no arranca y no pide aprobación.
+- **Si QA falla, PROD ni se ofrece.** Si el smoke, la integración o los E2E de QA fallan, el job de PROD no arranca y no pide aprobación.
 - **No se vuelve atrás por accidente.** Si una corrida vieja se aprueba tarde y PROD ya corre un commit más nuevo, el deploy se rechaza. Es un control de mejor esfuerzo: si el backend de PROD no responde o informa un commit desconocido, el deploy sigue (es la forma de arreglar un PROD caído).
 
 Archivos: `.github/workflows/deploy.yml` (las etapas), `.github/actions/deploy/action.yml` (deploy de un entorno + smoke) y `scripts/smoke.sh`.
@@ -60,8 +60,8 @@ En Settings → Environments, creá dos environments:
 | Secret | `VERCEL_TOKEN` | token de Vercel |
 | Secret | `VERCEL_ORG_ID` | Team ID / ID de la cuenta |
 | Secret | `VERCEL_PROJECT_ID` | Project ID del frontend QA |
-| Secret | `E2E_ADMIN_PHONE` | teléfono del admin de los E2E |
-| Secret | `E2E_ADMIN_PASSWORD` | contraseña del admin de los E2E |
+| Secret | `E2E_ADMIN_PHONE` | teléfono del admin de los E2E y la integración |
+| Secret | `E2E_ADMIN_PASSWORD` | contraseña del admin de los E2E y la integración |
 | Variable | `API_URL` | URL del backend QA, sin `/` final |
 | Variable | `FRONTEND_URL` | URL del frontend QA |
 
@@ -84,7 +84,7 @@ Los secrets de PROD viven solo en `production`: ningún otro job puede leerlos.
 ## Pasar un cambio a PROD
 
 1. Mergeá el PR a `main`.
-2. Esperá a que el workflow **Deploy** termine el job de QA (deploy, smoke y E2E). Si querés, probalo a mano en QA.
+2. Esperá a que el workflow **Deploy** termine el job de QA (deploy, smoke, integración y E2E). Si querés, probalo a mano en QA.
 3. En Actions → la corrida → **Review deployments** → marcá `production` → **Approve and deploy**.
 4. El job de PROD despliega y corre el smoke. Verde = publicado.
 

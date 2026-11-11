@@ -48,6 +48,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
-    "e2e": "playwright test"
+    "test:api": "playwright test --project=api",
+    "e2e": "playwright test --project=chromium"
   }
 }

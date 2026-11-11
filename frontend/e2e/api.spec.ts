@@ -48,9 +48,16 @@ test('public endpoints return the space and slot fields the frontend reads', asy
 
   const slots = await anon.get(`/spaces/${space.id}/slots?date=${tomorrow}`);
   expect(slots.status()).toBe(200);
-  const body = await slots.json();
-  expect(body).toHaveLength(1);
-  expect(body[0]).toMatchObject({ id: expect.any(Number), label: space.slotLabel, available: true });
+  // A new space also gets the default timed slots, besides the one createSpace adds.
+  const body: Record<string, unknown>[] = await slots.json();
+  const untimed = body.find((s) => s.label === space.slotLabel);
+  expect(untimed).toMatchObject({ id: expect.any(Number), available: true });
+  // A slot without a time omits start_time (undefined, not null): that crashed the space page once.
+  expect(untimed).not.toHaveProperty('start_time');
+  // Timed slots carry a clock time the frontend parses with timeToMinutes ("...T10:00:00Z" or "10:00").
+  const timed = body.find((s) => s.start_time !== undefined);
+  expect(timed?.start_time).toMatch(/(^|T)\d{2}:\d{2}/);
+  expect(timed?.end_time).toMatch(/(^|T)\d{2}:\d{2}/);
 
   expect((await anon.get('/spaces/999999999')).status()).toBe(404);
   await anon.dispose();
@@ -103,8 +110,9 @@ test('a booked slot becomes unavailable and a second booking gets 409', async ()
     space: { id: space.id },
   });
 
-  const slots: { available: boolean }[] = await (await secondApi.get(`/spaces/${space.id}/slots?date=${tomorrow}`)).json();
-  expect(slots[0].available).toBe(false);
+  const slots: { id: number; available: boolean }[] =
+    await (await secondApi.get(`/spaces/${space.id}/slots?date=${tomorrow}`)).json();
+  expect(slots.find((s) => s.id === slotId)?.available).toBe(false);
 
   const conflict = await secondApi.post('/bookings', { data: booking });
   expect(conflict.status()).toBe(409);

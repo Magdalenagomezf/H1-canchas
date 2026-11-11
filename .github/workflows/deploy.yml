@@ -63,7 +63,10 @@ jobs:
 
       - name: Install Playwright browser
         working-directory: frontend
-        run: npx playwright install --with-deps chromium
+        # Browser only, without --with-deps: the runner image already ships the system
+        # libraries Chromium needs, and --with-deps runs apt against the Ubuntu mirrors,
+        # which made CI fail when the runner could not reach them (2026-11-11).
+        run: npx playwright install chromium
 
       - name: E2E against QA
         working-directory: frontend

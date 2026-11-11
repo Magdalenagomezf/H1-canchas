@@ -105,6 +105,14 @@ Escribí migraciones compatibles con la versión anterior del código (agregar c
 - **Emergencia (PROD roto ya):** en Vercel, Deployments → el deploy anterior → **Instant Rollback**. En Render, Events → el deploy anterior → **Rollback**. Después igual revertí el PR, porque si no la próxima corrida vuelve a publicar el código roto.
 - Si el problema es una migración, el rollback del código no la deshace: corregila con una migración nueva.
 
+## Keep-alive (planes gratuitos)
+
+Supabase pausa una base gratuita tras una semana sin uso, y queda caída hasta reanudarla a mano desde el dashboard. `.github/workflows/keep-alive.yml` corre `scripts/smoke.sh` contra QA y PROD cada 3 días: `/health` hace una consulta real a la base y eso cuenta como uso. También se puede correr a mano (Actions → Keep alive → Run workflow).
+
+- Si falla, ese entorno está caído: GitHub te manda un mail. Revisá primero si Supabase pausó la base.
+- Cuando la base de un entorno pase a un plan pago, sacalo de la matriz del workflow; cuando no quede ninguno gratis, borrá el workflow.
+- GitHub desactiva los workflows programados si el repo pasa 60 días sin actividad. Se reactiva desde Actions.
+
 ## Qué no hacer
 
 - **No uses "Manual Deploy"** en Render ni redeploys desde el panel de Vercel en el día a día: se saltean los tests y QA. Son salidas de emergencia.

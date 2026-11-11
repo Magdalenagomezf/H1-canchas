@@ -1,0 +1,42 @@
+name: Keep alive
+
+# Supabase pauses a free-plan database after a week without activity, and it
+# stays down until someone resumes it from the dashboard (happened to QA on
+# 2026-11-10). Every few days this calls each backend's smoke test: /health
+# runs a real query against the database, which counts as activity.
+#
+# It does not keep Render awake (free services sleep after ~15 minutes and wake
+# on the next request); scripts/smoke.sh retries to absorb that cold start.
+# A failed run also means the environment is down: GitHub emails the failure.
+#
+# Remove an environment from the matrix when its database moves to a paid plan
+# (decision D1 in ROADMAP.md); delete this workflow when none is left on free.
+# The URLs are public and repeated here on purpose: reading them from the
+# "production" environment would wait for its required approval.
+# GitHub disables scheduled workflows after 60 days without repository activity.
+
+on:
+  schedule:
+    - cron: "0 12 */3 * *" # 12:00 UTC every third day of the month
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ping:
+    name: Ping ${{ matrix.env }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - env: qa
+            api-url: https://h1-canchas.onrender.com
+          - env: production
+            api-url: https://h1-canchas-prod.onrender.com
+    steps:
+      - uses: actions/checkout@v4
+      - name: Smoke test (wakes Render, queries the database)
+        run: scripts/smoke.sh "${{ matrix.api-url }}"

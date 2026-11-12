@@ -25,6 +25,8 @@ Cómo se usa este archivo:
 ## Antes de la inauguración
 
 ### E3. Pipeline y entornos QA y producción
+**Terminada el 2026-11-12**, salvo D1 (servidores pagos o gratuitos), que se decide 2 o 3 semanas antes de inaugurar.
+
 Orden decidido (2026-11-09): primero CI, después QA y PROD. Modelo: Continuous Delivery, como en el TP6 de la materia: QA se actualiza solo y a PROD solo pasa lo que se aprobó, en el horario que se elija.
 
 **CI (no depende de qué servidores se elijan):**
@@ -33,19 +35,19 @@ Orden decidido (2026-11-09): primero CI, después QA y PROD. Modelo: Continuous 
 
 **Entornos** (D2 decidido el 2026-11-09: pipeline en GitHub Actions, como en Mallki):
 - [ ] Decidir D1.
-- [ ] Entorno QA: decidido el 2026-11-10 que **lo que ya estaba publicado pasa a ser QA** (tiene datos de prueba). Faltan sus secrets en GitHub (ver `docs/DEPLOY.md`).
-- [ ] Entorno PROD: se crea ahora en planes gratuitos aunque después se mude por D1 (decidido el 2026-11-10). Arranca con credenciales de **prueba** de Mercado Pago, en una aplicación de MP propia, hasta decidir D3. Pasos en `docs/DEPLOY.md`.
-- [ ] Apagar el auto-deploy de los proveedores: solo el pipeline publica, y siempre el commit que se verificó (Render con `ref=<sha>` en el deploy hook, Vercel con su CLI desde el checkout del commit; `vercel.json` apaga los deploys por Git).
-- [ ] Pipeline (`.github/workflows/deploy.yml`, armado el 2026-11-10; falta configurar los entornos y probarlo) con las etapas del modelo de Mallki (TP6/TP7), en este orden:
+- [x] Entorno QA: decidido el 2026-11-10 que **lo que ya estaba publicado pasa a ser QA** (tiene datos de prueba). Secrets configurados en GitHub (ver `docs/DEPLOY.md`).
+- [x] Entorno PROD: se crea ahora en planes gratuitos aunque después se mude por D1 (decidido el 2026-11-10). Arranca con credenciales de **prueba** de Mercado Pago, en una aplicación de MP propia, hasta decidir D3. Pasos en `docs/DEPLOY.md`.
+- [x] Apagar el auto-deploy de los proveedores: solo el pipeline publica, y siempre el commit que se verificó (Render con `ref=<sha>` en el deploy hook, Vercel con su CLI desde el checkout del commit; `vercel.json` apaga los deploys por Git).
+- [x] Pipeline (`.github/workflows/deploy.yml`, armado el 2026-11-10; corrió completo de QA a PROD el 2026-11-11 y el 2026-11-12) con las etapas del modelo de Mallki (TP6/TP7), en este orden:
   1. **Build + tests** (CI, en cada PR y en `main`): build del backend y del frontend, lint, tests unitarios (service, controllers, Vitest) y tests de la base (repository contra un Postgres descartable; no pueden correr contra QA porque borran y recrean la base).
   2. **Deploy a QA** del commit que pasó la etapa 1.
   3. **Integración contra QA**: smoke test (la app responde, la base está conectada y corre el commit esperado) + pruebas de API sin navegador (`frontend/e2e/api.spec.ts`, `npm run test:api`): códigos de estado, permisos por rol, conflicto de reserva (409) y el contrato del JSON que lee el front. Corren antes de los E2E, en QA y también en el CI de cada PR contra el stack descartable (decidido el 2026-11-11, igual que los E2E: se quedan en el PR porque frenan un cambio roto antes de `main`).
   4. **E2E contra QA** con Playwright.
   5. **Aprobación manual** (environment `production` de GitHub, con los secrets de PROD solo ahí).
   6. **Deploy a PROD** + smoke.
-- [ ] Si fallan el smoke, la integración o los E2E de QA, PROD queda salteado y ni pide aprobación.
+- [x] Si fallan el smoke, la integración o los E2E de QA, PROD queda salteado y ni pide aprobación (el job `production` tiene `needs: qa`).
 - [x] `/health` devuelve el commit que está corriendo (y ahora sí consulta la base: 503 si no responde). Hecho el 2026-11-09.
-- [ ] Smoke test después de cada deploy (script `scripts/smoke.sh` hecho el 2026-11-09; enganchado al deploy el 2026-11-10, falta verlo correr contra QA y PROD): la app responde y con el commit esperado (no solo "está viva"). Con reintentos por el cold start.
+- [x] Smoke test después de cada deploy (script `scripts/smoke.sh` hecho el 2026-11-09; enganchado al deploy el 2026-11-10, pasó contra QA y PROD el 2026-11-11): la app responde y con el commit esperado (no solo "está viva"). Con reintentos por el cold start.
 - [x] **Keep-alive** mientras QA o PROD estén en planes gratuitos: `.github/workflows/keep-alive.yml` (2026-11-11) corre `scripts/smoke.sh` contra QA y PROD cada 3 días (despierta Render y hace una consulta real a Supabase), para que la base no se pause por inactividad. Motivo: pausa de QA del 2026-11-10 (ver D1). Solo sirve para Supabase: Render se duerme a los 15 min y se despierta solo. Si se pasa la base de PROD a pago (D1), se saca PROD de la matriz; sigue sirviendo para QA. Ojo: GitHub apaga los workflows programados tras 60 días sin actividad en el repo.
 - [x] Documentar cómo se pasa un cambio de QA a PROD y cómo se vuelve atrás (rollback): `docs/DEPLOY.md` (2026-11-10).
 
@@ -135,8 +137,8 @@ D6 decidido (2026-11-09): las dos cosas, lo legal y lo técnico. Checklist armad
 - [x] Arreglar los errores de lint que ya existían (eran 11). Hecho el 2026-11-09 (PR #1).
 - [x] Tests unitarios del frontend con **Vitest**, solo de lógica pura (no pantallas). Hecho el 2026-11-09: fechas y horas en `src/lib/dates.ts` y perfil en `src/lib/profile.ts`, corren en el CI.
 - [x] E2E con **Playwright** (2026-11-09): entrar (y contraseña incorrecta), registrarse y reservar hasta llegar a Mercado Pago, reserva manual desde el panel. Corren en el CI contra un entorno descartable; cada test crea y limpia sus datos. Ya encontraron un bug: un turno sin horario dejaba en blanco la página de la cancha.
-- [ ] Apuntar los mismos E2E a QA cuando exista (etapa 4 del pipeline; cambian solo `E2E_BASE_URL`, `E2E_API_URL` y el admin de QA en secrets). Más adelante, el cierre de caja.
-- [ ] Decidir al armar QA si el E2E local del CI se mantiene (agarra errores antes de mergear) o se saca para quedar igual al modelo de Mallki (E2E solo contra QA).
+- [x] Apuntar los mismos E2E a QA (etapa 4 del pipeline; cambian solo `E2E_BASE_URL`, `E2E_API_URL` y el admin de QA en secrets). Corren en cada deploy desde el 2026-11-11. Más adelante, sumar el cierre de caja.
+- [x] Decidir si el E2E local del CI se mantiene o se saca para quedar igual al modelo de Mallki: decidido el 2026-11-11 que **se mantiene**, porque frena un cambio roto antes de `main` (ver E3, etapa 3).
 - [ ] Revisar que los tests del backend sigan cubriendo lo nuevo (hoy: service 82%, controllers 45%, repository 63%).
 - [ ] Verificar mobile (375px y 768px).
 - [ ] Probar el panel a mano (reserva manual, turno fijo, bloqueo, cancelar) y el flujo de reserva hasta el pago.

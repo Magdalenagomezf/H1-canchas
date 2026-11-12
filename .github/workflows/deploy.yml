@@ -1,7 +1,7 @@
 name: Deploy
 
 # Pipeline after CI (see docs/DEPLOY.md):
-#   CI green on main → deploy QA → smoke → E2E against QA
+#   CI green on main → deploy QA → smoke → API integration → E2E against QA
 #   → manual approval (environment "production") → deploy PROD → smoke.
 # Every job deploys the commit CI verified (workflow_run.head_sha), never
 # "the latest of main". It lives apart from ci.yml because CI cancels
@@ -48,11 +48,25 @@ jobs:
           api-url: ${{ vars.API_URL }}
           frontend-url: ${{ vars.FRONTEND_URL }}
 
-      - name: Install E2E dependencies
+      - name: Install test dependencies
         working-directory: frontend
-        run: |
-          npm ci
-          npx playwright install --with-deps chromium
+        run: npm ci
+
+      # API integration first: if the QA API is broken, fail before spending a browser on it.
+      - name: API integration against QA
+        working-directory: frontend
+        env:
+          E2E_API_URL: ${{ vars.API_URL }}
+          E2E_ADMIN_PHONE: ${{ secrets.E2E_ADMIN_PHONE }}
+          E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
+        run: npm run test:api -- --trace off
+
+      - name: Install Playwright browser
+        working-directory: frontend
+        # Browser only, without --with-deps: the runner image already ships the system
+        # libraries Chromium needs, and --with-deps runs apt against the Ubuntu mirrors,
+        # which made CI fail when the runner could not reach them (2026-11-11).
+        run: npx playwright install chromium
 
       - name: E2E against QA
         working-directory: frontend
@@ -65,7 +79,7 @@ jobs:
         # report, and GitHub masks secrets in logs, not in artifacts.
         run: npm run e2e -- --trace off
 
-      - name: Upload E2E report on failure
+      - name: Upload test report on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:

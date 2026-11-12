@@ -58,14 +58,18 @@ cd frontend && npm run build
 # Frontend unit tests (Vitest; pure logic in src/lib, tests next to the code as *.test.ts)
 cd frontend && npm test
 
+# API integration tests (Playwright without a browser, frontend/e2e/api.spec.ts): status codes,
+# role checks and the JSON contract. Same variables as the E2E, without E2E_BASE_URL.
+cd frontend && E2E_API_URL=http://localhost:8080 E2E_ADMIN_PHONE=<admin phone> E2E_ADMIN_PASSWORD=<admin password> npm run test:api
+
 # E2E tests (Playwright, frontend/e2e). The app must be running; each test creates and
 # cleans its own data through an admin account. First time: npx playwright install chromium
 cd frontend && E2E_BASE_URL=http://localhost:5173 E2E_API_URL=http://localhost:8080 \n  E2E_ADMIN_PHONE=<admin phone> E2E_ADMIN_PASSWORD=<admin password> npm run e2e
 ```
 
-CI (`.github/workflows/ci.yml`) runs on every PR and push to `main`: backend `go vet`, `go build` and `go test -race` against a Postgres 16 service (with `REQUIRE_DB=1`, so the repository integration tests fail instead of skipping when the database is missing), a smoke test (`scripts/smoke.sh`) against a fresh build that must report the PR's commit, frontend `npm run lint`, `npm test` and `npm run build`, and the Playwright E2E tests against a throwaway stack (Postgres + backend + `vite preview`, seeded with `frontend/e2e/ci-seed.sql`). The E2E answer the Mercado Pago preference call themselves, because CI has no MP credentials. Run the same checks locally before pushing.
+CI (`.github/workflows/ci.yml`) runs on every PR and push to `main`: backend `go vet`, `go build` and `go test -race` against a Postgres 16 service (with `REQUIRE_DB=1`, so the repository integration tests fail instead of skipping when the database is missing), a smoke test (`scripts/smoke.sh`) against a fresh build that must report the PR's commit, frontend `npm run lint`, `npm test` and `npm run build`, and, against a throwaway stack, the API integration tests followed by the Playwright E2E tests (Postgres + backend + `vite preview`, seeded with `frontend/e2e/ci-seed.sql`). The E2E answer the Mercado Pago preference call themselves, because CI has no MP credentials. Run the same checks locally before pushing.
 
-Deploys go only through `.github/workflows/deploy.yml`, triggered when CI passes on `main`: deploy to QA → smoke → E2E against QA → manual approval (GitHub environment `production`) → deploy to PROD → smoke. Each run deploys the commit CI verified (Render deploy hook with `ref=<sha>`, Vercel CLI from a checkout of that commit); provider auto-deploys are off. Setup, migrations, promotion and rollback: `docs/DEPLOY.md`.
+Deploys go only through `.github/workflows/deploy.yml`, triggered when CI passes on `main`: deploy to QA → smoke → API integration → E2E against QA → manual approval (GitHub environment `production`) → deploy to PROD → smoke. Each run deploys the commit CI verified (Render deploy hook with `ref=<sha>`, Vercel CLI from a checkout of that commit); provider auto-deploys are off. Setup, migrations, promotion and rollback: `docs/DEPLOY.md`.
 
 There is no migration runner wired into the app — migrations in `backend/migrations/` must be applied manually against the PostgreSQL database (e.g. with `psql`). Run them in order (001 → 010).
 

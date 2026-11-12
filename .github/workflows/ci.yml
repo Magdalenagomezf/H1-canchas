@@ -72,6 +72,8 @@ jobs:
   e2e:
     name: E2E (Playwright)
     runs-on: ubuntu-latest
+    # A hung step (e.g. a download) fails in 20 minutes instead of GitHub's 6-hour default.
+    timeout-minutes: 20
     services:
       postgres:
         image: postgres:16
@@ -135,9 +137,16 @@ jobs:
           SMOKE_DELAY_SECONDS=2 scripts/smoke.sh http://localhost:8080
           for i in $(seq 30); do curl -sf http://localhost:4173 > /dev/null && exit 0; sleep 1; done
           echo "frontend did not start"; cat "$RUNNER_TEMP/preview.log"; exit 1
+      # API integration first: if the API is broken, fail before spending a browser on it.
+      - name: Run API integration tests
+        working-directory: frontend
+        run: npm run test:api
       - name: Install Playwright browser
         working-directory: frontend
-        run: npx playwright install --with-deps chromium
+        # Browser only, without --with-deps: the runner image already ships the system
+        # libraries Chromium needs, and --with-deps runs apt against the Ubuntu mirrors,
+        # which made CI fail when the runner could not reach them (2026-11-11).
+        run: npx playwright install chromium
       - name: Run E2E tests
         working-directory: frontend
         run: npm run e2e

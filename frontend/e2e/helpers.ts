@@ -35,15 +35,16 @@ async function ok<T>(res: APIResponse): Promise<T> {
   return (await res.json()) as T;
 }
 
-export async function loginAsAdmin(): Promise<APIRequestContext> {
+/** Logs in with phone and password and returns an API context that sends the user's token. */
+export async function loginAs(phone: string, password: string): Promise<APIRequestContext> {
   const anon = await apiAs();
-  const { token } = await ok<{ token: string }>(
-    await anon.post('/auth/login', {
-      data: { phone: requireEnv('E2E_ADMIN_PHONE'), password: requireEnv('E2E_ADMIN_PASSWORD') },
-    }),
-  );
+  const { token } = await ok<{ token: string }>(await anon.post('/auth/login', { data: { phone, password } }));
   await anon.dispose();
   return apiAs(token);
+}
+
+export async function loginAsAdmin(): Promise<APIRequestContext> {
+  return loginAs(requireEnv('E2E_ADMIN_PHONE'), requireEnv('E2E_ADMIN_PASSWORD'));
 }
 
 export async function registerCustomer(name: string) {

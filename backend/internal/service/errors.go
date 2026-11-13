@@ -32,6 +32,10 @@ var (
 	// The JWT is still valid but its user no longer exists (e.g. deleted by an admin).
 	ErrSessionUserNotFound = errors.New("tu sesión ya no es válida, volvé a iniciar sesión")
 
+	// restablecer contraseña: one generic message for unknown, used or
+	// expired tokens and inactive users, so the cause is never revealed.
+	ErrInvalidResetToken = errors.New("El link para restablecer la contraseña no es válido o ya venció. Pedí uno nuevo.")
+
 	// genéricos — cualquier service los puede usar
 	ErrNotFound     = errors.New("recurso no encontrado")
 	ErrUnauthorized = errors.New("no autorizado")

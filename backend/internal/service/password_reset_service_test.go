@@ -190,6 +190,15 @@ func TestPasswordReset_Confirm_InvalidToken(t *testing.T) {
 	}
 }
 
+func TestPasswordReset_Confirm_Accepts72BytePassword(t *testing.T) {
+	svc, repo, _ := newResetFixture()
+	repo.redeemable[sha256Hex("t")] = true
+
+	if err := svc.Confirm(context.Background(), "t", strings.Repeat("a", 72)); err != nil {
+		t.Errorf("72 bytes: unexpected error %v", err)
+	}
+}
+
 func TestPasswordReset_Confirm_UsesRegisterPasswordRule(t *testing.T) {
 	svc, repo, _ := newResetFixture()
 	repo.redeemable[sha256Hex("t")] = true
@@ -199,6 +208,13 @@ func TestPasswordReset_Confirm_UsesRegisterPasswordRule(t *testing.T) {
 	}
 	if err := svc.Confirm(context.Background(), "t", "12345"); !errors.Is(err, ErrPasswordTooShort) {
 		t.Errorf("short: err = %v, want ErrPasswordTooShort", err)
+	}
+	if err := svc.Confirm(context.Background(), "t", strings.Repeat("a", 73)); !errors.Is(err, ErrPasswordTooLong) {
+		t.Errorf("over 72 bytes: err = %v, want ErrPasswordTooLong", err)
+	}
+	// The limit counts bytes, like bcrypt: 37 x "ñ" is 37 characters but 74 bytes.
+	if err := svc.Confirm(context.Background(), "t", strings.Repeat("ñ", 37)); !errors.Is(err, ErrPasswordTooLong) {
+		t.Errorf("37 x ñ (74 bytes): err = %v, want ErrPasswordTooLong", err)
 	}
 	if repo.resetHash != "" {
 		t.Error("an invalid password must not reach the repository")

@@ -100,6 +100,7 @@ func TestPasswordResetConfirm_ErrorMapping(t *testing.T) {
 	}{
 		{"invalid token", service.ErrInvalidResetToken, http.StatusBadRequest, "invalid_reset_token"},
 		{"short password", service.ErrPasswordTooShort, http.StatusBadRequest, ""},
+		{"long password", service.ErrPasswordTooLong, http.StatusBadRequest, ""},
 		{"internal", errors.New("db down"), http.StatusInternalServerError, ""},
 	}
 	for _, tc := range cases {

@@ -94,6 +94,9 @@ func validateNewPassword(password string) error {
 	if len(password) < 6 {
 		return ErrPasswordTooShort
 	}
+	if len(password) > 72 { // bytes, the bcrypt limit
+		return ErrPasswordTooLong
+	}
 	return nil
 }
 

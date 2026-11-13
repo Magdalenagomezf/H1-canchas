@@ -35,6 +35,18 @@ func unusedTokens(t *testing.T, userID int64) int {
 	return n
 }
 
+// mustCreateToken inserts a token as test setup and stops the test if it was
+// not created, so no test can pass because its setup silently failed.
+func mustCreateToken(t *testing.T, repo interface {
+	CreateIfNoRecent(context.Context, int64, string, time.Duration, time.Duration) (bool, error)
+}, userID int64, tokenHash string) {
+	t.Helper()
+	created, err := repo.CreateIfNoRecent(context.Background(), userID, tokenHash, resetTTL, resetCooldown)
+	if err != nil || !created {
+		t.Fatalf("setup: created=%v err=%v", created, err)
+	}
+}
+
 func TestPasswordResetRepo_CreateIfNoRecent_StoresTokenWithExpiry(t *testing.T) {
 	truncateAll(t)
 	repo := repository.NewPasswordResetRepository(testDB)
@@ -65,9 +77,7 @@ func TestPasswordResetRepo_CreateIfNoRecent_CooldownBlocksSecondToken(t *testing
 	userID := seedUser(t)
 	ctx := context.Background()
 
-	if _, err := repo.CreateIfNoRecent(ctx, userID, hashOf('a'), resetTTL, resetCooldown); err != nil {
-		t.Fatalf("first: %v", err)
-	}
+	mustCreateToken(t, repo, userID, hashOf('a'))
 	created, err := repo.CreateIfNoRecent(ctx, userID, hashOf('b'), resetTTL, resetCooldown)
 	if err != nil {
 		t.Fatalf("second: %v", err)
@@ -93,9 +103,7 @@ func TestPasswordResetRepo_CreateIfNoRecent_AllowedAfterCooldown(t *testing.T) {
 	userID := seedUser(t)
 	ctx := context.Background()
 
-	if _, err := repo.CreateIfNoRecent(ctx, userID, hashOf('a'), resetTTL, resetCooldown); err != nil {
-		t.Fatalf("first: %v", err)
-	}
+	mustCreateToken(t, repo, userID, hashOf('a'))
 	testDB.MustExec(`UPDATE password_reset_tokens SET created_at = now() - interval '3 minutes'`)
 
 	created, err := repo.CreateIfNoRecent(ctx, userID, hashOf('b'), resetTTL, resetCooldown)
@@ -111,9 +119,9 @@ func TestPasswordResetRepo_ResetPassword_SetsHashAndInvalidatesAllTokens(t *test
 	ctx := context.Background()
 
 	// Two pending tokens: an older one and the one being redeemed.
-	repo.CreateIfNoRecent(ctx, userID, hashOf('a'), resetTTL, resetCooldown)
+	mustCreateToken(t, repo, userID, hashOf('a'))
 	testDB.MustExec(`UPDATE password_reset_tokens SET created_at = now() - interval '3 minutes'`)
-	repo.CreateIfNoRecent(ctx, userID, hashOf('b'), resetTTL, resetCooldown)
+	mustCreateToken(t, repo, userID, hashOf('b'))
 
 	ok, err := repo.ResetPassword(ctx, hashOf('b'), "new-hash")
 	if err != nil {
@@ -149,7 +157,7 @@ func TestPasswordResetRepo_ResetPassword_GivesPasswordToGoogleOnlyAccount(t *tes
 		`INSERT INTO users (name, email, google_sub, role) VALUES ('G', 'g@example.com', 'sub-1', 'customer') RETURNING id`); err != nil {
 		t.Fatalf("seed google user: %v", err)
 	}
-	repo.CreateIfNoRecent(ctx, userID, hashOf('a'), resetTTL, resetCooldown)
+	mustCreateToken(t, repo, userID, hashOf('a'))
 
 	ok, err := repo.ResetPassword(ctx, hashOf('a'), "new-hash")
 	if err != nil || !ok {
@@ -183,7 +191,7 @@ func TestPasswordResetRepo_ResetPassword_RejectsUnredeemableTokens(t *testing.T)
 			repo := repository.NewPasswordResetRepository(testDB)
 			userID := seedUser(t)
 			ctx := context.Background()
-			repo.CreateIfNoRecent(ctx, userID, hashOf('a'), resetTTL, resetCooldown)
+			mustCreateToken(t, repo, userID, hashOf('a'))
 			tc.setup(userID)
 
 			ok, err := repo.ResetPassword(ctx, tc.hash, "new-hash")
@@ -205,7 +213,7 @@ func TestPasswordResetRepo_ResetPassword_ConcurrentRedeemSucceedsOnce(t *testing
 	repo := repository.NewPasswordResetRepository(testDB)
 	userID := seedUser(t)
 	ctx := context.Background()
-	repo.CreateIfNoRecent(ctx, userID, hashOf('a'), resetTTL, resetCooldown)
+	mustCreateToken(t, repo, userID, hashOf('a'))
 
 	const n = 5
 	var wg sync.WaitGroup
@@ -239,7 +247,7 @@ func TestPasswordResetRepo_TokensDeletedWithUser(t *testing.T) {
 	truncateAll(t)
 	repo := repository.NewPasswordResetRepository(testDB)
 	userID := seedUser(t)
-	repo.CreateIfNoRecent(context.Background(), userID, hashOf('a'), resetTTL, resetCooldown)
+	mustCreateToken(t, repo, userID, hashOf('a'))
 
 	testDB.MustExec(`DELETE FROM users WHERE id = $1`, userID)
 

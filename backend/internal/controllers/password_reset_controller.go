@@ -56,7 +56,7 @@ func (h *PasswordResetController) Confirm(c *gin.Context) {
 		c.Status(http.StatusNoContent)
 	case errors.Is(err, service.ErrInvalidResetToken):
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "invalid_reset_token"})
-	case errors.Is(err, service.ErrPasswordRequired), errors.Is(err, service.ErrPasswordTooShort):
+	case errors.Is(err, service.ErrPasswordRequired), errors.Is(err, service.ErrPasswordTooShort), errors.Is(err, service.ErrPasswordTooLong):
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 	default:
 		log.Printf("PasswordReset Confirm error: %v", err)

@@ -19,6 +19,7 @@ const passwordResetRequestedMessage = "Si el email corresponde a una cuenta, te 
 type passwordResetServiceI interface {
 	RequestReset(email string)
 	Confirm(ctx context.Context, token, password string) error
+	CheckToken(ctx context.Context, token string) error
 }
 
 type PasswordResetController struct {
@@ -40,6 +41,28 @@ func (h *PasswordResetController) Request(c *gin.Context) {
 
 	h.svc.RequestReset(req.Email)
 	c.JSON(http.StatusAccepted, gin.H{"message": passwordResetRequestedMessage})
+}
+
+// Check — POST /auth/password-reset/check
+// 204 when the link still works, 400 invalid_reset_token otherwise. The reset
+// page calls it on load. POST keeps the token in the body, out of URLs and logs.
+func (h *PasswordResetController) Check(c *gin.Context) {
+	var req dto.PasswordResetCheckRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "payload inválido"})
+		return
+	}
+
+	err := h.svc.CheckToken(c.Request.Context(), req.Token)
+	switch {
+	case err == nil:
+		c.Status(http.StatusNoContent)
+	case errors.Is(err, service.ErrInvalidResetToken):
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "invalid_reset_token"})
+	default:
+		log.Printf("PasswordReset Check error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "error interno"})
+	}
 }
 
 // Confirm — POST /auth/password-reset/confirm

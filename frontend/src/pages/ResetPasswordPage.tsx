@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useMutation } from '@tanstack/react-query';
-import { confirmPasswordReset } from '../api/auth';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { checkResetToken, confirmPasswordReset } from '../api/auth';
 import { ApiError } from '../api/client';
 import { AuthShell, Field, FormFooter, PasswordInput } from '@/components/auth/AuthForm';
 import { buttonVariants } from '@/components/ui/button';
@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils';
 
 const linkButton = cn(buttonVariants({ variant: 'court' }), 'h-14 w-full justify-center text-base font-semibold');
 
+const isInvalidLink = (err: unknown) => err instanceof ApiError && err.code === 'invalid_reset_token';
 
 function InvalidLink() {
   return (
@@ -45,11 +46,25 @@ export default function ResetPasswordPage() {
   const [show, setShow] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
+  // Ask the backend right away whether the link still works, so a used or
+  // expired link shows its message before the user fills in the form.
+  const check = useQuery({
+    queryKey: ['password-reset-check', token],
+    queryFn: () => checkResetToken(token ?? ''),
+    enabled: !!token,
+    // An invalid link is an answer, not a failure worth retrying.
+    retry: (count, err) => !isInvalidLink(err) && count < 2,
+    // Never re-check on focus: after a successful reset the token is used up.
+    refetchOnWindowFocus: false,
+  });
+
   const mutation = useMutation({
     mutationFn: () => confirmPasswordReset(token ?? '', password),
   });
 
-  const linkInvalid = !token || (mutation.error instanceof ApiError && mutation.error.code === 'invalid_reset_token');
+  // If the check fails for another reason (network, server), the form still
+  // shows: the confirm request checks the token again anyway.
+  const linkInvalid = !token || isInvalidLink(check.error) || isInvalidLink(mutation.error);
 
   const handleSubmit = () => {
     const err = newPasswordError(password, repeat);
@@ -69,6 +84,12 @@ export default function ResetPasswordPage() {
     );
   } else if (linkInvalid) {
     content = <InvalidLink />;
+  } else if (check.isPending) {
+    content = (
+      <p role="status" className="text-lg leading-relaxed text-paper/70">
+        Comprobando el link...
+      </p>
+    );
   } else {
     content = (
       <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} className="flex flex-col gap-8">

@@ -33,12 +33,18 @@ type fakeResetRepo struct {
 	redeemable   map[string]bool
 	resetHash    string
 	resetPwdHash string
+	checkedHash  string
 }
 
 func (f *fakeResetRepo) CreateIfNoRecent(_ context.Context, userID int64, tokenHash string, ttl, cooldown time.Duration) (bool, error) {
 	f.createCalls++
 	f.userID, f.tokenHash, f.ttl, f.cooldown = userID, tokenHash, ttl, cooldown
 	return !f.inCooldown, nil
+}
+
+func (f *fakeResetRepo) IsRedeemable(_ context.Context, tokenHash string) (bool, error) {
+	f.checkedHash = tokenHash
+	return f.redeemable[tokenHash], nil
 }
 
 func (f *fakeResetRepo) ResetPassword(_ context.Context, tokenHash, passwordHash string) (bool, error) {
@@ -187,6 +193,27 @@ func TestPasswordReset_Confirm_InvalidToken(t *testing.T) {
 		if err := svc.Confirm(context.Background(), token, "nueva-clave"); !errors.Is(err, ErrInvalidResetToken) {
 			t.Errorf("token %q: err = %v, want ErrInvalidResetToken", token, err)
 		}
+	}
+}
+
+func TestPasswordReset_CheckToken(t *testing.T) {
+	svc, repo, _ := newResetFixture()
+	repo.redeemable[sha256Hex("good")] = true
+	ctx := context.Background()
+
+	if err := svc.CheckToken(ctx, "good"); err != nil {
+		t.Errorf("redeemable token: err = %v, want nil", err)
+	}
+	if repo.checkedHash != sha256Hex("good") {
+		t.Errorf("checked %q, want the token's SHA-256", repo.checkedHash)
+	}
+	for _, token := range []string{"unknown", ""} {
+		if err := svc.CheckToken(ctx, token); !errors.Is(err, ErrInvalidResetToken) {
+			t.Errorf("token %q: err = %v, want ErrInvalidResetToken", token, err)
+		}
+	}
+	if repo.resetHash != "" {
+		t.Error("checking must never redeem the token")
 	}
 }
 

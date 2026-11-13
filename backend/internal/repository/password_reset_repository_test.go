@@ -255,3 +255,65 @@ func TestPasswordResetRepo_TokensDeletedWithUser(t *testing.T) {
 		t.Errorf("got %d tokens after deleting the user, want 0", n)
 	}
 }
+
+func TestPasswordResetRepo_IsRedeemable_MatchesResetPasswordRules(t *testing.T) {
+	cases := []struct {
+		name  string
+		setup func(userID int64)
+		hash  string
+		want  bool
+	}{
+		{"fresh token", func(int64) {}, hashOf('a'), true},
+		{"unknown", func(int64) {}, hashOf('z'), false},
+		{"used", func(int64) {
+			testDB.MustExec(`UPDATE password_reset_tokens SET used_at = now()`)
+		}, hashOf('a'), false},
+		{"expired", func(int64) {
+			testDB.MustExec(`UPDATE password_reset_tokens SET expires_at = now() - interval '1 second'`)
+		}, hashOf('a'), false},
+		{"inactive user", func(userID int64) {
+			testDB.MustExec(`UPDATE users SET is_active = false WHERE id = $1`, userID)
+		}, hashOf('a'), false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			truncateAll(t)
+			repo := repository.NewPasswordResetRepository(testDB)
+			userID := seedUser(t)
+			mustCreateToken(t, repo, userID, hashOf('a'))
+			tc.setup(userID)
+
+			got, err := repo.IsRedeemable(context.Background(), tc.hash)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != tc.want {
+				t.Errorf("IsRedeemable = %v, want %v", got, tc.want)
+			}
+			// Checking never uses the token up.
+			var used int
+			testDB.Get(&used, `SELECT count(*) FROM password_reset_tokens WHERE used_at IS NOT NULL AND token_hash = $1`, hashOf('a'))
+			if tc.name == "fresh token" && used != 0 {
+				t.Error("IsRedeemable marked the token as used")
+			}
+		})
+	}
+}
+
+func TestPasswordResetRepo_IsRedeemable_FalseAfterRedeem(t *testing.T) {
+	truncateAll(t)
+	repo := repository.NewPasswordResetRepository(testDB)
+	userID := seedUser(t)
+	mustCreateToken(t, repo, userID, hashOf('a'))
+	ctx := context.Background()
+
+	if ok, _ := repo.IsRedeemable(ctx, hashOf('a')); !ok {
+		t.Fatal("fresh token should be redeemable")
+	}
+	if ok, err := repo.ResetPassword(ctx, hashOf('a'), "new-hash"); err != nil || !ok {
+		t.Fatalf("redeem: ok=%v err=%v", ok, err)
+	}
+	if ok, _ := repo.IsRedeemable(ctx, hashOf('a')); ok {
+		t.Error("a redeemed token must not be redeemable")
+	}
+}

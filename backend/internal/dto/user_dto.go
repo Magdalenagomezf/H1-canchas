@@ -78,3 +78,8 @@ type PasswordResetConfirmRequest struct {
 	Token    string `json:"token"`
 	Password string `json:"password"`
 }
+
+// PasswordResetCheckRequest is the JSON for POST /auth/password-reset/check.
+type PasswordResetCheckRequest struct {
+	Token string `json:"token"`
+}

@@ -44,6 +44,28 @@ func (r *passwordResetRepo) CreateIfNoRecent(ctx context.Context, userID int64, 
 	return n == 1, nil
 }
 
+// redeemableTokenWhere selects a token that can still be used: unused, not
+// expired, and owned by an active user. IsRedeemable and ResetPassword share it
+// so the check the page does on load and the actual redeem never disagree.
+const redeemableTokenWhere = `
+        FROM password_reset_tokens t
+        JOIN users u ON u.id = t.user_id
+        WHERE t.token_hash = $1
+        AND t.used_at IS NULL
+        AND t.expires_at > now()
+        AND u.is_active`
+
+// IsRedeemable reports whether the token could be redeemed right now. It
+// changes nothing.
+func (r *passwordResetRepo) IsRedeemable(ctx context.Context, tokenHash string) (bool, error) {
+	var ok bool
+	err := r.db.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 `+redeemableTokenWhere+`)`, tokenHash).Scan(&ok)
+	if err != nil {
+		return false, fmt.Errorf("passwordResetRepo.IsRedeemable: %w", err)
+	}
+	return ok, nil
+}
+
 // ResetPassword redeems a token: if it exists, is unused, has not expired and
 // its user is active, it sets the user's password hash and marks every unused
 // token of that user as used (the redeemed one included), in one transaction.
@@ -62,15 +84,8 @@ func (r *passwordResetRepo) ResetPassword(ctx context.Context, tokenHash, passwo
 	// FOR UPDATE locks the token row: two concurrent redeems of the same
 	// token serialize, and the second sees used_at set.
 	var userID int64
-	err = tx.QueryRowContext(ctx, `
-        SELECT t.user_id
-        FROM password_reset_tokens t
-        JOIN users u ON u.id = t.user_id
-        WHERE t.token_hash = $1
-        AND t.used_at IS NULL
-        AND t.expires_at > now()
-        AND u.is_active
-        FOR UPDATE OF t`, tokenHash).Scan(&userID)
+	err = tx.QueryRowContext(ctx,
+		`SELECT t.user_id `+redeemableTokenWhere+` FOR UPDATE OF t`, tokenHash).Scan(&userID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, nil
 	}

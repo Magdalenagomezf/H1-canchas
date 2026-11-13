@@ -85,16 +85,25 @@ func (s *UserService) checkContactAvailable(ctx context.Context, op, rawPhone st
 	return normalizedPhone, nil
 }
 
+const (
+	minPasswordBytes = 6
+	// maxPasswordBytes is the bcrypt limit: longer inputs make
+	// bcrypt.GenerateFromPassword fail with ErrPasswordTooLong.
+	maxPasswordBytes = 72
+)
+
 // validateNewPassword is the single password rule for every flow that sets
-// one: register, staff creation and password reset.
+// one: register, staff creation and password reset. It counts bytes (len), so
+// "ñ" or an accented letter counts as 2. The frontend applies the same rule in
+// frontend/src/lib/passwordReset.ts.
 func validateNewPassword(password string) error {
 	if password == "" {
 		return ErrPasswordRequired
 	}
-	if len(password) < 6 {
+	if len(password) < minPasswordBytes {
 		return ErrPasswordTooShort
 	}
-	if len(password) > 72 { // bytes, the bcrypt limit
+	if len(password) > maxPasswordBytes {
 		return ErrPasswordTooLong
 	}
 	return nil

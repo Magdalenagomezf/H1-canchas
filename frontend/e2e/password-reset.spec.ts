@@ -28,6 +28,8 @@ test('a reset link with an invalid token offers to ask for a new one', async ({ 
   await page.getByRole('button', { name: 'Guardar contraseña' }).click();
 
   await expect(page.getByRole('alert')).toContainText('no es válido o ya venció');
+  // A retry after a lost response also lands here, so the page points to the login too.
+  await expect(page.getByRole('alert')).toContainText('Si ya cambiaste la contraseña con este link');
   await page.getByRole('link', { name: 'Pedir un link nuevo' }).click();
   await expect(page).toHaveURL(/\/recuperar-contrasena$/);
 });

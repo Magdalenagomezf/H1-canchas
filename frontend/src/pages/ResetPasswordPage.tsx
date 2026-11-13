@@ -18,6 +18,10 @@ function InvalidLink() {
       <p className="text-lg leading-relaxed text-paper">
         El link para restablecer la contraseña no es válido o ya venció. Pedí uno nuevo.
       </p>
+      {/* A retry after a lost response lands here although the first try worked. */}
+      <p className="text-base leading-relaxed text-paper/70">
+        Si ya cambiaste la contraseña con este link, probá iniciar sesión con la nueva.
+      </p>
       <Link to="/recuperar-contrasena" className={linkButton}>
         Pedir un link nuevo
       </Link>

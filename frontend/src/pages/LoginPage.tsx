@@ -1,105 +1,22 @@
-import { useState, type ReactNode } from 'react';
+import { useState } from 'react';
 import { Link, useNavigate, useLocation, type Location } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
-import { ArrowRight, Eye, EyeOff } from 'lucide-react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { GoogleLogin } from '@react-oauth/google';
 import { login, loginWithGoogle, register } from '../api/auth';
 import { useAuth } from '../hooks/useAuth';
 import { GOOGLE_CLIENT_ID } from '@/lib/google';
-import { buttonVariants } from '@/components/ui/button';
+import { Field, FormFooter, PasswordInput, inputClass } from '@/components/auth/AuthForm';
 import { LandingNav } from '@/components/landing/LandingNav';
 import { LightLine } from '@/components/landing/LightLine';
 import { SectionLabel } from '@/components/landing/SectionLabel';
 import { CONTAINER, EASE, GRID, MONO } from '@/components/landing/ui';
 import { cn } from '@/lib/utils';
 
-const inputClass =
-  'w-full border-0 border-b border-paper/25 bg-transparent py-3 text-lg text-paper placeholder:text-paper/30 outline-none transition-colors duration-300 focus:border-paper focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-paper';
-
 const TITLES = [
   { lines: ['BIENVENIDO'], text: 'Ingresá para gestionar tus reservas' },
   { lines: ['CREÁ TU', 'CUENTA'], text: 'Es gratis y lleva menos de un minuto' },
 ] as const;
-
-function Field({ id, label, children }: { id: string; label: string; children: ReactNode }) {
-  return (
-    <div className="flex flex-col gap-1">
-      <label htmlFor={id} className={cn(MONO, 'text-concrete')}>
-        {label}
-      </label>
-      {children}
-    </div>
-  );
-}
-
-function PasswordInput({
-  id,
-  value,
-  onChange,
-  show,
-  onToggle,
-}: {
-  id: string;
-  value: string;
-  onChange: (v: string) => void;
-  show: boolean;
-  onToggle: () => void;
-}) {
-  return (
-    <div className="relative">
-      <input
-        id={id}
-        type={show ? 'text' : 'password'}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        required
-        className={cn(inputClass, 'pr-11')}
-      />
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-label={show ? 'Ocultar contraseña' : 'Mostrar contraseña'}
-        className="absolute right-0 top-1/2 flex size-10 -translate-y-1/2 items-center justify-center text-concrete transition-colors hover:text-paper"
-      >
-        {show ? <EyeOff size={18} /> : <Eye size={18} />}
-      </button>
-    </div>
-  );
-}
-
-function FormFooter({
-  error,
-  isPending,
-  idle,
-  pending,
-}: {
-  error?: string;
-  isPending: boolean;
-  idle: string;
-  pending: string;
-}) {
-  return (
-    <>
-      {error && (
-        <p role="alert" className={cn(MONO, 'normal-case tracking-normal text-red-300')}>
-          {error}
-        </p>
-      )}
-      <button
-        type="submit"
-        disabled={isPending}
-        className={cn(
-          buttonVariants({ variant: 'court' }),
-          'mt-2 h-14 w-full justify-center gap-3 text-base font-semibold disabled:cursor-not-allowed disabled:opacity-60',
-        )}
-      >
-        {isPending ? pending : idle}
-        <ArrowRight size={18} className="transition-transform duration-300 group-hover:translate-x-1" />
-      </button>
-    </>
-  );
-}
 
 export default function LoginPage() {
   const navigate = useNavigate();

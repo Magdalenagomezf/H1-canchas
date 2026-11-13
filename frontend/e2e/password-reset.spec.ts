@@ -16,7 +16,8 @@ test('the login page links to the forgot password form, which always confirms', 
   await page.getByLabel('Email').fill(customer.email);
   await page.getByRole('button', { name: 'Enviar link' }).click();
 
-  await expect(page.getByRole('status')).toContainText('Si el email corresponde a una cuenta');
+  await expect(page.getByRole('status')).toContainText('¡Listo! Revisá tu email');
+  await expect(page.getByRole('status')).toContainText('Si está registrado, en unos minutos te llega el link.');
 });
 
 // The real backend says any made-up token is invalid, so the tests that need
@@ -86,4 +87,11 @@ test('a successful reset shows the success message and a link to log in', async 
 test('a reset page opened without a token shows the invalid link message', async ({ page }) => {
   await page.goto('/restablecer-contrasena');
   await expect(page.getByRole('alert')).toContainText('no es válido o ya venció');
+});
+
+test('if the link check fails for another reason, the form still shows', async ({ page }) => {
+  // A server or network error is not an answer about the link: confirm checks it again.
+  await page.route('**/auth/password-reset/check', (route) => route.fulfill({ status: 500, json: { error: 'error interno' } }));
+  await page.goto('/restablecer-contrasena#token=some-token');
+  await expect(page.getByLabel('Nueva contraseña')).toBeVisible({ timeout: 15_000 });
 });

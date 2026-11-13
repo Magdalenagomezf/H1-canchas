@@ -290,11 +290,11 @@ func TestPasswordResetRepo_IsRedeemable_MatchesResetPasswordRules(t *testing.T) 
 			if got != tc.want {
 				t.Errorf("IsRedeemable = %v, want %v", got, tc.want)
 			}
-			// Checking never uses the token up.
-			var used int
-			testDB.Get(&used, `SELECT count(*) FROM password_reset_tokens WHERE used_at IS NOT NULL AND token_hash = $1`, hashOf('a'))
-			if tc.name == "fresh token" && used != 0 {
-				t.Error("IsRedeemable marked the token as used")
+			// Checking never uses the token up: a redeemable token stays unused.
+			if tc.want {
+				if n := unusedTokens(t, userID); n != 1 {
+					t.Errorf("got %d unused tokens after IsRedeemable, want 1", n)
+				}
 			}
 		})
 	}
@@ -307,13 +307,13 @@ func TestPasswordResetRepo_IsRedeemable_FalseAfterRedeem(t *testing.T) {
 	mustCreateToken(t, repo, userID, hashOf('a'))
 	ctx := context.Background()
 
-	if ok, _ := repo.IsRedeemable(ctx, hashOf('a')); !ok {
-		t.Fatal("fresh token should be redeemable")
+	if ok, err := repo.IsRedeemable(ctx, hashOf('a')); err != nil || !ok {
+		t.Fatalf("fresh token: ok=%v err=%v, want redeemable", ok, err)
 	}
 	if ok, err := repo.ResetPassword(ctx, hashOf('a'), "new-hash"); err != nil || !ok {
 		t.Fatalf("redeem: ok=%v err=%v", ok, err)
 	}
-	if ok, _ := repo.IsRedeemable(ctx, hashOf('a')); ok {
-		t.Error("a redeemed token must not be redeemable")
+	if ok, err := repo.IsRedeemable(ctx, hashOf('a')); err != nil || ok {
+		t.Errorf("after redeem: ok=%v err=%v, want not redeemable and no error", ok, err)
 	}
 }

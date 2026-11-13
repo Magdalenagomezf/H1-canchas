@@ -21,6 +21,8 @@ import (
 )
 
 const (
+	// passwordResetTTL is also written as "1 hora" in the email templates
+	// (templates/password_reset.*): change them together.
 	passwordResetTTL      = time.Hour
 	passwordResetCooldown = 2 * time.Minute
 	passwordResetSubject  = "Restablecé tu contraseña — H1 Canchas"

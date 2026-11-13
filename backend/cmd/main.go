@@ -121,6 +121,10 @@ func main() {
 	}
 	notificationService := service.NewNotificationService(bookingRepo, emailSender, cfg.FrontendURL)
 
+	passwordResetRepo := repository.NewPasswordResetRepository(db)
+	passwordResetService := service.NewPasswordResetService(userRepo, passwordResetRepo, emailSender, cfg.FrontendURL)
+	passwordResetCtrl := controllers.NewPasswordResetController(passwordResetService)
+
 	paymentService := service.NewPaymentService(paymentRepo, bookingRepo, mpClient, cfg.MPWebhookSecret, cfg.AllowedOrigin, cfg.MPWebhookURL, notificationService)
 	paymentCtrl := controllers.NewPaymentController(paymentService)
 
@@ -142,6 +146,8 @@ func main() {
 		auth.POST("/register", authCtrl.Register)
 		auth.POST("/login", authCtrl.Login)
 		auth.POST("/google", authCtrl.GoogleLogin)
+		auth.POST("/password-reset", passwordResetCtrl.Request)
+		auth.POST("/password-reset/confirm", passwordResetCtrl.Confirm)
 	}
 
 	commit := buildinfo.Commit()

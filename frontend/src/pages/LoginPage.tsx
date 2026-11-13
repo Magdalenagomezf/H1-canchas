@@ -193,6 +193,12 @@ export default function LoginPage() {
                           show={showLoginPass}
                           onToggle={() => setShowLoginPass((v) => !v)}
                         />
+                        <Link
+                          to="/recuperar-contrasena"
+                          className={cn(MONO, 'mt-2 self-end normal-case tracking-normal text-concrete transition-colors hover:text-paper')}
+                        >
+                          ¿Olvidaste tu contraseña?
+                        </Link>
                       </Field>
                       <FormFooter error={error} isPending={isPending} idle="Ingresar" pending="Ingresando..." />
                     </motion.form>

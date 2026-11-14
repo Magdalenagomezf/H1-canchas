@@ -9,6 +9,8 @@ import MyBookingsPage from './pages/MyBookingsPage';
 import StaffPanelPage from './pages/StaffPanelPage';
 import PaymentResultPage from './pages/PaymentResultPage';
 import ProfilePage from './pages/ProfilePage';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 
 function PrivateRoute() {
   const { isAuthenticated } = useAuth();
@@ -33,7 +35,10 @@ function StaffRoute() {
 }
 
 // Routes that render their own landing-styled nav instead of the legacy Navbar.
-const LANDING_PATHS = ['/', '/login', '/canchas', '/canchas/:id', '/mis-reservas', '/pago/resultado/:bookingId', '/panel', '/mi-perfil'];
+const LANDING_PATHS = [
+  '/', '/login', '/recuperar-contrasena', '/restablecer-contrasena', '/canchas', '/canchas/:id',
+  '/mis-reservas', '/pago/resultado/:bookingId', '/panel', '/mi-perfil',
+];
 
 const isLandingPath = (pathname: string) =>
   LANDING_PATHS.some((path) => matchPath({ path, end: true }, pathname));
@@ -47,6 +52,9 @@ export default function App() {
         <Route path="/" element={<HomePage />} />
         <Route path="/canchas" element={<SpacesPage />} />
         <Route path="/canchas/:id" element={<SpaceDetailPage />} />
+        {/* Not public-only: a signed-in user may also open the link from the email. */}
+        <Route path="/recuperar-contrasena" element={<ForgotPasswordPage />} />
+        <Route path="/restablecer-contrasena" element={<ResetPasswordPage />} />
 
         <Route element={<PublicOnlyRoute />}>
           <Route path="/login" element={<LoginPage />} />

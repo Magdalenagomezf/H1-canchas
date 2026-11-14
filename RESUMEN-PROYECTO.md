@@ -120,6 +120,8 @@ Inyección de dependencias manual en `cmd/main.go`. Las interfaces las define el
 |---|---|---|---|
 | POST | `/auth/register` | Público | Crea usuario `customer` (email obligatorio), devuelve `{ token, user }` |
 | POST | `/auth/login` | Público | Login con teléfono + password, devuelve `{ token, user }` |
+| POST | `/auth/password-reset` | Público | Body `{ email }`. Siempre 202 con el mismo mensaje, exista o no la cuenta; manda el mail con el link en segundo plano |
+| POST | `/auth/password-reset/confirm` | Público | Body `{ token, password }`. 204 si cambió la contraseña; 400 con `code: "invalid_reset_token"` si el link no sirve (inexistente, usado, vencido o usuario inactivo); 400 si la contraseña no cumple la regla |
 | POST | `/auth/google` | Público | Body `{ credential }` (ID token de Google). Login/registro/vinculación, devuelve `{ token, user }`. 401 token inválido o `email_verified=false` o usuario inactivo, 403 cuenta de staff, 409 conflicto de cuenta, 503 si falta `GOOGLE_CLIENT_ID` |
 
 ### Mi perfil (cualquier usuario autenticado, staff incluido)
@@ -221,6 +223,16 @@ Si dos requests llegan al mismo tiempo, el primero inserta y el segundo falla en
 - Solo el admin crea espacios (decisión de negocio: el recepcionista no puede dar de alta canchas).
 - Turnos fijos y bloqueos **materializan reservas reales** en vez de guardar una regla recurrente evaluada en tiempo real. Así la protección contra doble reserva (índice único) funciona sin cambios y no hace falta un cron. El costo es el límite de 366 días por batch.
 
+### Restablecer contraseña (E5, 2026-11-13)
+- **El link lleva un token de un solo uso**: 32 bytes de `crypto/rand`. La tabla `password_reset_tokens` guarda solo su SHA-256, así que si se filtra la base no hay links que sirvan. Vence en **1 hora** y cada usuario recibe como mucho uno cada **2 minutos**.
+- **La respuesta no revela si el email está registrado**: siempre 202 con el mismo mensaje, y el mail sale en segundo plano para que tampoco lo delate el tiempo de respuesta.
+- **El token viaja en el fragmento** (`/restablecer-contrasena#token=...`): el navegador no lo manda al servidor, así que no queda en logs ni en el header Referer. La página lo saca de la barra de direcciones apenas lo lee.
+- **Al usarlo se invalidan todos los tokens pendientes** del usuario, en la misma transacción que cambia la contraseña.
+- Funciona también para cuentas creadas solo con Google: con esto pasan a tener contraseña (para entrar con teléfono igual necesitan cargar el teléfono).
+- **Limitación aceptada**: las sesiones abiertas (JWT) siguen valiendo hasta que vencen (24 h).
+- Pendiente para E8: el límite de 2 minutos no es atómico ante dos pedidos simultáneos, y si falla el envío del mail el límite corre igual.
+- Contraseña: mínimo 6 caracteres y **máximo 72 bytes** (límite de bcrypt; antes un valor más largo daba 500 en el registro). La misma regla vale para registro, staff y restablecer.
+
 ### Épica "Mail y cuentas" (cerrada el 2026-11-09)
 - **Sin mail en reservas manuales** (era la Fase 2; se descartó el 2026-10-02). En una reserva manual el cliente ya arregló todo con el recepcionista, casi siempre por WhatsApp o teléfono, así que un mail de confirmación no le suma nada. Pedirle el email haría más lenta la carga y agregaría errores de tipeo. Si en el futuro hace falta (por ejemplo, para los recordatorios de "Avisos al cliente"), se agrega una columna `customer_email` en `bookings` que acepte `NULL`, sin tocar los datos existentes.
 - **Los clientes cargados a mano no se convierten en usuarios.** Siguen como nombre y teléfono en la reserva.
@@ -236,6 +248,8 @@ Si dos requests llegan al mismo tiempo, el primero inserta y el segundo falla en
 |---|---|---|
 | `/` | HomePage | ✅ Rediseñada (ver "Diseño de landing y login"): hero con línea LED, 01 El lugar (frase + slideshow de 3 fotos cada 3,5 s), 02 Espacios (índice tipográfico con datos de `GET /spaces`), 03 El complejo, 04 Cómo reservar, CTA final y footer |
 | `/login` | LoginPage | ✅ Login + Registro en tabs, manejo de errores. Rediseñada con el estilo de la landing (la lógica no cambió) |
+| `/recuperar-contrasena` | ForgotPasswordPage | ✅ Pide el email y muestra siempre la misma confirmación. Se llega desde "¿Olvidaste tu contraseña?" en el login |
+| `/restablecer-contrasena` | ResetPasswordPage | ✅ Abre desde el link del mail: lee el token del fragmento, pide la contraseña nueva dos veces y muestra el éxito con link al login, o el error de link inválido con link para pedir uno nuevo |
 | `/canchas` | SpacesPage | ✅ Rediseñada. Filtros por tipo (TODOS + 5 tipos). En TODOS muestra una grilla compacta de 3 columnas (`SpacesGrid`); con un filtro activo muestra el índice tipográfico grande (`SpacesIndex`) |
 | `/canchas/:id` | SpaceDetailPage | ✅ Detalle, selector de fecha, grilla de slots disponibles, reserva, modal con resumen de la seña antes de ir a Mercado Pago. Rediseñada: galería, pasos "01/ Fecha" y "02/ Turno", resumen fijo (barra inferior en mobile). Lógica de reserva y pago sin cambios |
 | `/mis-reservas` | MyBookingsPage | ✅ Lista de reservas (activas / historial), cancelar con dialog de confirmación. Rediseñada: filas con hairlines y estados en mono |
@@ -351,7 +365,9 @@ Resueltos: bloqueo de canchas por fecha (implementado como booking batches de ti
 Recordatorios de la reserva y mails de cancelación y de vencimiento del hold. Reusa el `EmailSender` de `pkg/email` (el mismo del mail de confirmación).
 
 ### Migraciones
-Se aplican manualmente con `psql`, en orden: `001` → `010` (`005_add_payments`, `006_add_booking_batches`, `007_add_padbol_beach_voley_types`, `008_normalize_user_email`, `009_add_confirmation_email_sent_at`, `010_google_login`).
+Se aplican manualmente con `psql`, en orden: `001` → `011` (`005_add_payments`, `006_add_booking_batches`, `007_add_padbol_beach_voley_types`, `008_normalize_user_email`, `009_add_confirmation_email_sent_at`, `010_google_login`, `011_password_reset_tokens`).
+
+`011` crea la tabla `password_reset_tokens` (aditiva, no toca datos existentes). Hay que aplicarla **antes** de deployar el backend de restablecer contraseña: sin la tabla, pedir el link falla (el pedido responde 202 igual, pero el mail no sale) y confirmar responde 500.
 
 `010` (Fase 4a) hace nullables `users.password_hash` y `users.phone`, agrega `users.google_sub VARCHAR(255) NULL UNIQUE` y el `CHECK users_login_method_chk` (contraseña o `google_sub`). Funciona con datos existentes (todas las filas tienen `password_hash`). Va en una transacción; correrla con `psql -v ON_ERROR_STOP=1 -f backend/migrations/010_google_login.sql`. Hay que aplicarla **antes** de deployar el backend de la 4a: sin la columna `google_sub`, todos los SELECT de usuarios fallan.
 

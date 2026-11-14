@@ -125,6 +125,7 @@ func TestUserService_Register_Validations(t *testing.T) {
 		{"whitespace phone", "Juan", "   ", "password1", ErrPhoneRequired},
 		{"empty password", "Juan", "1122334455", "", ErrPasswordRequired},
 		{"short password", "Juan", "1122334455", "12345", ErrPasswordTooShort},
+		{"password over 72 bytes", "Juan", "1122334455", strings.Repeat("a", 73), ErrPasswordTooLong},
 	}
 
 	for _, tc := range cases {
@@ -220,6 +221,7 @@ func TestUserService_CreateStaff_Validations(t *testing.T) {
 		{"empty phone", "Juan", "", "password1", ErrPhoneRequired},
 		{"empty password", "Juan", "1122334455", "", ErrPasswordRequired},
 		{"short password", "Juan", "1122334455", "12345", ErrPasswordTooShort},
+		{"password over 72 bytes", "Juan", "1122334455", strings.Repeat("a", 73), ErrPasswordTooLong},
 	}
 
 	for _, tc := range cases {

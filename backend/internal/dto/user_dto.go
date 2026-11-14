@@ -65,3 +65,16 @@ type UpdateProfileRequest struct {
 type UpdateRoleRequest struct {
 	Role string `json:"role" binding:"required"`
 }
+
+// PasswordResetRequest is the JSON for POST /auth/password-reset.
+type PasswordResetRequest struct {
+	Email string `json:"email" binding:"required"`
+}
+
+// PasswordResetConfirmRequest is the JSON for POST /auth/password-reset/confirm.
+// Both fields are checked by the service, so a missing one gets the same
+// answer as an invalid one.
+type PasswordResetConfirmRequest struct {
+	Token    string `json:"token"`
+	Password string `json:"password"`
+}

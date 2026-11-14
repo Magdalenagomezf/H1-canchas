@@ -180,6 +180,7 @@ func TestAuthController_Register_ErrorStatus(t *testing.T) {
 		{service.ErrPhoneRequired, http.StatusBadRequest},
 		{service.ErrPasswordRequired, http.StatusBadRequest},
 		{service.ErrPasswordTooShort, http.StatusBadRequest},
+		{service.ErrPasswordTooLong, http.StatusBadRequest},
 		{service.ErrEmailRequired, http.StatusBadRequest},
 		{service.ErrInvalidEmail, http.StatusBadRequest},
 		{service.ErrInvalidPhone, http.StatusBadRequest},

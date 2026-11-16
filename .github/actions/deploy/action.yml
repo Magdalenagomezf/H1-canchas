@@ -77,7 +77,12 @@ runs:
         # Stop before building a frontend that cannot reach the API. A variable
         # marked Sensitive in Vercel is pulled as the literal "[SENSITIVE]",
         # and the backend smoke test would not notice the broken frontend.
-        api_url="$(sed -n 's/^VITE_API_URL=//p' .vercel/.env.production.local | tr -d '"\r')"
+        env_file=.vercel/.env.production.local
+        if [[ ! -f "$env_file" ]]; then
+          echo "FAIL: vercel pull did not create $env_file, cannot check VITE_API_URL."
+          exit 1
+        fi
+        api_url="$(sed -n 's/^VITE_API_URL=//p' "$env_file" | tr -d '"\r')"
         if [[ ! "$api_url" =~ ^https?://[^/[:space:]]+ ]]; then
           echo "FAIL: VITE_API_URL in Vercel is not a URL (got '${api_url}')."
           echo "Recreate it in Vercel without the Sensitive option."

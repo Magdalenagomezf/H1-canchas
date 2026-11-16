@@ -14,6 +14,8 @@ var (
 	ErrPhoneRequired    = errors.New("el teléfono es obligatorio")
 	ErrPasswordRequired = errors.New("la contraseña es obligatoria")
 	ErrPasswordTooShort = errors.New("la contraseña debe tener al menos 6 caracteres")
+	// bcrypt rejects more than 72 bytes; checking it first turns a 500 into a 400.
+	ErrPasswordTooLong = errors.New("la contraseña no puede superar los 72 caracteres")
 
 	// datos de contacto
 	ErrInvalidPhone       = errors.New("el teléfono no es válido")
@@ -31,6 +33,10 @@ var (
 	ErrProfilePhoneMissing    = errors.New("Cargá tu teléfono en Mi perfil para poder reservar")
 	// The JWT is still valid but its user no longer exists (e.g. deleted by an admin).
 	ErrSessionUserNotFound = errors.New("tu sesión ya no es válida, volvé a iniciar sesión")
+
+	// restablecer contraseña: one generic message for unknown, used or
+	// expired tokens and inactive users, so the cause is never revealed.
+	ErrInvalidResetToken = errors.New("El link para restablecer la contraseña no es válido o ya venció. Pedí uno nuevo.")
 
 	// genéricos — cualquier service los puede usar
 	ErrNotFound     = errors.New("recurso no encontrado")

@@ -255,3 +255,65 @@ func TestPasswordResetRepo_TokensDeletedWithUser(t *testing.T) {
 		t.Errorf("got %d tokens after deleting the user, want 0", n)
 	}
 }
+
+func TestPasswordResetRepo_IsRedeemable_MatchesResetPasswordRules(t *testing.T) {
+	cases := []struct {
+		name  string
+		setup func(userID int64)
+		hash  string
+		want  bool
+	}{
+		{"fresh token", func(int64) {}, hashOf('a'), true},
+		{"unknown", func(int64) {}, hashOf('z'), false},
+		{"used", func(int64) {
+			testDB.MustExec(`UPDATE password_reset_tokens SET used_at = now()`)
+		}, hashOf('a'), false},
+		{"expired", func(int64) {
+			testDB.MustExec(`UPDATE password_reset_tokens SET expires_at = now() - interval '1 second'`)
+		}, hashOf('a'), false},
+		{"inactive user", func(userID int64) {
+			testDB.MustExec(`UPDATE users SET is_active = false WHERE id = $1`, userID)
+		}, hashOf('a'), false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			truncateAll(t)
+			repo := repository.NewPasswordResetRepository(testDB)
+			userID := seedUser(t)
+			mustCreateToken(t, repo, userID, hashOf('a'))
+			tc.setup(userID)
+
+			got, err := repo.IsRedeemable(context.Background(), tc.hash)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != tc.want {
+				t.Errorf("IsRedeemable = %v, want %v", got, tc.want)
+			}
+			// Checking never uses the token up: a redeemable token stays unused.
+			if tc.want {
+				if n := unusedTokens(t, userID); n != 1 {
+					t.Errorf("got %d unused tokens after IsRedeemable, want 1", n)
+				}
+			}
+		})
+	}
+}
+
+func TestPasswordResetRepo_IsRedeemable_FalseAfterRedeem(t *testing.T) {
+	truncateAll(t)
+	repo := repository.NewPasswordResetRepository(testDB)
+	userID := seedUser(t)
+	mustCreateToken(t, repo, userID, hashOf('a'))
+	ctx := context.Background()
+
+	if ok, err := repo.IsRedeemable(ctx, hashOf('a')); err != nil || !ok {
+		t.Fatalf("fresh token: ok=%v err=%v, want redeemable", ok, err)
+	}
+	if ok, err := repo.ResetPassword(ctx, hashOf('a'), "new-hash"); err != nil || !ok {
+		t.Fatalf("redeem: ok=%v err=%v", ok, err)
+	}
+	if ok, err := repo.IsRedeemable(ctx, hashOf('a')); err != nil || ok {
+		t.Errorf("after redeem: ok=%v err=%v, want not redeemable and no error", ok, err)
+	}
+}

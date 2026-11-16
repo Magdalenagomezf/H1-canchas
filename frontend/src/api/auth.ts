@@ -18,3 +18,7 @@ export const requestPasswordReset = (email: string): Promise<string> =>
 /** Sets a new password with the token from the email link. Fails with code "invalid_reset_token" when the link no longer works. */
 export const confirmPasswordReset = (token: string, password: string): Promise<void> =>
   apiClient.post('/auth/password-reset/confirm', { token, password }).then(() => undefined);
+
+/** Checks, without using it up, whether the link's token still works. Fails with code "invalid_reset_token" when it does not. */
+export const checkResetToken = (token: string): Promise<void> =>
+  apiClient.post('/auth/password-reset/check', { token }).then(() => undefined);

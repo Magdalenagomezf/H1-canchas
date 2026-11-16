@@ -21,6 +21,8 @@ import (
 )
 
 const (
+	// passwordResetTTL is also written as "1 hora" in the email templates
+	// (templates/password_reset.*): change them together.
 	passwordResetTTL      = time.Hour
 	passwordResetCooldown = 2 * time.Minute
 	passwordResetSubject  = "Restablecé tu contraseña — H1 Canchas"
@@ -45,6 +47,7 @@ type PasswordResetUserRepo interface {
 // PasswordResetRepo stores the hashed one-time tokens.
 type PasswordResetRepo interface {
 	CreateIfNoRecent(ctx context.Context, userID int64, tokenHash string, ttl, cooldown time.Duration) (bool, error)
+	IsRedeemable(ctx context.Context, tokenHash string) (bool, error)
 	ResetPassword(ctx context.Context, tokenHash, passwordHash string) (bool, error)
 }
 
@@ -128,6 +131,23 @@ func (s *PasswordResetService) SendResetLink(ctx context.Context, rawEmail strin
 
 	if err := s.sender.Send(ctx, *user.Email, passwordResetSubject, htmlBuf.String(), textBuf.String()); err != nil {
 		return fmt.Errorf("PasswordResetService.SendResetLink: sending mail to user %d: %w", user.ID, err)
+	}
+	return nil
+}
+
+// CheckToken tells the reset page, as soon as it opens, whether its link still
+// works, so the user does not fill in the form for nothing. It never uses the
+// token up; Confirm checks again when redeeming.
+func (s *PasswordResetService) CheckToken(ctx context.Context, token string) error {
+	if token == "" {
+		return ErrInvalidResetToken
+	}
+	ok, err := s.tokens.IsRedeemable(ctx, hashResetToken(token))
+	if err != nil {
+		return fmt.Errorf("PasswordResetService.CheckToken: %w", err)
+	}
+	if !ok {
+		return ErrInvalidResetToken
 	}
 	return nil
 }

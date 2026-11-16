@@ -122,6 +122,16 @@ test('a password reset confirm rejects a bad token and a bad password', async ()
   await anon.dispose();
 });
 
+test('a password reset check rejects a missing or made-up token', async () => {
+  const anon = await apiAs();
+  for (const data of [{ token: 'not-a-real-token' }, { token: '' }, {}]) {
+    const res = await anon.post('/auth/password-reset/check', { data });
+    expect(res.status()).toBe(400);
+    expect(await res.json()).toMatchObject({ code: 'invalid_reset_token', error: expect.any(String) });
+  }
+  await anon.dispose();
+});
+
 test('a booked slot becomes unavailable and a second booking gets 409', async () => {
   const slotId = await slotIdOf(admin, space);
   const first = await registerCustomer('API Primero');

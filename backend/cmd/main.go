@@ -148,6 +148,7 @@ func main() {
 		auth.POST("/google", authCtrl.GoogleLogin)
 		auth.POST("/password-reset", passwordResetCtrl.Request)
 		auth.POST("/password-reset/confirm", passwordResetCtrl.Confirm)
+		auth.POST("/password-reset/check", passwordResetCtrl.Check)
 	}
 
 	commit := buildinfo.Commit()

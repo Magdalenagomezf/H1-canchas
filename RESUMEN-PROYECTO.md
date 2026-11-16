@@ -122,6 +122,7 @@ Inyección de dependencias manual en `cmd/main.go`. Las interfaces las define el
 | POST | `/auth/login` | Público | Login con teléfono + password, devuelve `{ token, user }` |
 | POST | `/auth/password-reset` | Público | Body `{ email }`. Siempre 202 con el mismo mensaje, exista o no la cuenta; manda el mail con el link en segundo plano |
 | POST | `/auth/password-reset/confirm` | Público | Body `{ token, password }`. 204 si cambió la contraseña; 400 con `code: "invalid_reset_token"` si el link no sirve (inexistente, usado, vencido o usuario inactivo); 400 si la contraseña no cumple la regla |
+| POST | `/auth/password-reset/check` | Público | Body `{ token }`. 204 si el link todavía sirve; 400 con `code: "invalid_reset_token"` si no. No gasta el token. La pantalla lo llama al abrir, así un link usado o vencido muestra el aviso antes del formulario |
 | POST | `/auth/google` | Público | Body `{ credential }` (ID token de Google). Login/registro/vinculación, devuelve `{ token, user }`. 401 token inválido o `email_verified=false` o usuario inactivo, 403 cuenta de staff, 409 conflicto de cuenta, 503 si falta `GOOGLE_CLIENT_ID` |
 
 ### Mi perfil (cualquier usuario autenticado, staff incluido)
@@ -227,6 +228,7 @@ Si dos requests llegan al mismo tiempo, el primero inserta y el segundo falla en
 - **El link lleva un token de un solo uso**: 32 bytes de `crypto/rand`. La tabla `password_reset_tokens` guarda solo su SHA-256, así que si se filtra la base no hay links que sirvan. Vence en **1 hora** y cada usuario recibe como mucho uno cada **2 minutos**.
 - **La respuesta no revela si el email está registrado**: siempre 202 con el mismo mensaje, y el mail sale en segundo plano para que tampoco lo delate el tiempo de respuesta.
 - **El token viaja en el fragmento** (`/restablecer-contrasena#token=...`): el navegador no lo manda al servidor, así que no queda en logs ni en el header Referer. La página lo saca de la barra de direcciones apenas lo lee.
+- **La pantalla comprueba el link apenas abre** (`/auth/password-reset/check`), con las mismas condiciones que el canje. Un link ya usado o vencido muestra el aviso enseguida, sin hacer llenar el formulario para nada (lo encontró la usuaria probando, 2026-11-13).
 - **Al usarlo se invalidan todos los tokens pendientes** del usuario, en la misma transacción que cambia la contraseña.
 - Funciona también para cuentas creadas solo con Google: con esto pasan a tener contraseña (para entrar con teléfono igual necesitan cargar el teléfono).
 - **Limitación aceptada**: las sesiones abiertas (JWT) siguen valiendo hasta que vencen (24 h).

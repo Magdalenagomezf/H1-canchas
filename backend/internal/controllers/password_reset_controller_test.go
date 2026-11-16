@@ -17,6 +17,14 @@ import (
 type mockPasswordResetService struct {
 	requested []string
 	confirmFn func(ctx context.Context, token, password string) error
+	checkFn   func(ctx context.Context, token string) error
+}
+
+func (m *mockPasswordResetService) CheckToken(ctx context.Context, token string) error {
+	if m.checkFn != nil {
+		return m.checkFn(ctx, token)
+	}
+	return nil
 }
 
 func (m *mockPasswordResetService) RequestReset(email string) {
@@ -35,6 +43,7 @@ func newPasswordResetRouter(svc passwordResetServiceI) *gin.Engine {
 	ctrl := NewPasswordResetController(svc)
 	r.POST("/auth/password-reset", ctrl.Request)
 	r.POST("/auth/password-reset/confirm", ctrl.Confirm)
+	r.POST("/auth/password-reset/check", ctrl.Check)
 	return r
 }
 
@@ -121,6 +130,47 @@ func TestPasswordResetConfirm_ErrorMapping(t *testing.T) {
 			}
 			if tc.status == http.StatusBadRequest && resp["error"] != tc.err.Error() {
 				t.Errorf("error = %q, want %q", resp["error"], tc.err.Error())
+			}
+		})
+	}
+}
+
+func TestPasswordResetCheck_StatusMapping(t *testing.T) {
+	cases := []struct {
+		name     string
+		err      error
+		status   int
+		wantCode string
+	}{
+		{"valid", nil, http.StatusNoContent, ""},
+		{"invalid", service.ErrInvalidResetToken, http.StatusBadRequest, "invalid_reset_token"},
+		{"internal", errors.New("db down"), http.StatusInternalServerError, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var gotToken string
+			svc := &mockPasswordResetService{checkFn: func(_ context.Context, token string) error {
+				gotToken = token
+				return tc.err
+			}}
+			w := postJSON(newPasswordResetRouter(svc), "/auth/password-reset/check", `{"token":"tok"}`)
+
+			if w.Code != tc.status {
+				t.Fatalf("status = %d, want %d", w.Code, tc.status)
+			}
+			if gotToken != "tok" {
+				t.Errorf("service got token %q, want tok", gotToken)
+			}
+			if tc.status == http.StatusNoContent {
+				return
+			}
+			var resp map[string]string
+			json.Unmarshal(w.Body.Bytes(), &resp)
+			if resp["code"] != tc.wantCode {
+				t.Errorf("code = %q, want %q", resp["code"], tc.wantCode)
+			}
+			if tc.status == http.StatusInternalServerError && resp["error"] != "error interno" {
+				t.Errorf("internal error leaked: %q", resp["error"])
 			}
 		})
 	}

@@ -13,11 +13,13 @@ export default function ForgotPasswordPage() {
   return (
     <AuthShell lines={['RECUPERÁ TU', 'CONTRASEÑA']} text="Te mandamos un link a tu email para que elijas una nueva">
       {mutation.isSuccess ? (
-        // The backend answers the same whether the email has an account or not.
+        // Same text whether the email has an account or not: it must never
+        // reveal which emails are registered. How long the link lasts is said
+        // in the email itself, next to the button.
         <div role="status" className="flex flex-col gap-4">
-          <p className="text-lg leading-relaxed text-paper">{mutation.data}</p>
-          <p className="text-base leading-relaxed text-paper/70">
-            Revisá también la carpeta de spam. El link vale por 1 hora.
+          <p className="text-2xl font-semibold leading-snug text-paper">¡Listo! Revisá tu email</p>
+          <p className="text-lg leading-relaxed text-paper/85">
+            Si está registrado, en unos minutos te llega el link.
           </p>
         </div>
       ) : (

@@ -8,17 +8,18 @@ export function readResetToken(hash: string): string | null {
   return token ? token : null;
 }
 
-// Same rule as the backend (validateNewPassword): 6 characters minimum and
-// 72 bytes maximum, the bcrypt limit.
-const MIN_LENGTH = 6;
+// Same rule as the backend (validateNewPassword), which counts UTF-8 bytes
+// like Go's len(): at least 6 and at most 72, the bcrypt limit. "ñ" or an
+// accented letter is 2 bytes, so the messages avoid promising a character count
+// for the maximum.
+const MIN_BYTES = 6;
 const MAX_BYTES = 72;
 
 /** Returns the message to show for the new password, or null when it is valid. */
 export function newPasswordError(password: string, repeat: string): string | null {
-  if (password.length < MIN_LENGTH) return `La contraseña debe tener al menos ${MIN_LENGTH} caracteres`;
-  if (new TextEncoder().encode(password).length > MAX_BYTES) {
-    return `La contraseña no puede superar los ${MAX_BYTES} caracteres`;
-  }
+  const bytes = new TextEncoder().encode(password).length;
+  if (bytes < MIN_BYTES) return `La contraseña debe tener al menos ${MIN_BYTES} caracteres`;
+  if (bytes > MAX_BYTES) return 'La contraseña es demasiado larga';
   if (password !== repeat) return 'Las contraseñas no coinciden';
   return null;
 }

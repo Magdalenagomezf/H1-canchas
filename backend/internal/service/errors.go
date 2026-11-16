@@ -14,8 +14,9 @@ var (
 	ErrPhoneRequired    = errors.New("el teléfono es obligatorio")
 	ErrPasswordRequired = errors.New("la contraseña es obligatoria")
 	ErrPasswordTooShort = errors.New("la contraseña debe tener al menos 6 caracteres")
-	// bcrypt rejects more than 72 bytes; checking it first turns a 500 into a 400.
-	ErrPasswordTooLong = errors.New("la contraseña no puede superar los 72 caracteres")
+	// Over maxPasswordBytes (the bcrypt limit). The limit counts bytes, not
+	// characters ("ñ" is 2), so the message gives no number.
+	ErrPasswordTooLong = errors.New("la contraseña es demasiado larga")
 
 	// datos de contacto
 	ErrInvalidPhone       = errors.New("el teléfono no es válido")

@@ -67,12 +67,26 @@ runs:
         VERCEL_TOKEN: ${{ inputs.vercel-token }}
         VERCEL_ORG_ID: ${{ inputs.vercel-org-id }}
         VERCEL_PROJECT_ID: ${{ inputs.vercel-project-id }}
+        API_URL: ${{ inputs.api-url }}
       run: |
         # pull brings the project's settings and production variables
         # (VITE_API_URL is baked into the build), build runs here and
         # deploy --prebuilt only uploads the result.
         npm install --global vercel@65.3.1
         vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+        # Stop before building a frontend that cannot reach the API. A variable
+        # marked Sensitive in Vercel is pulled as the literal "[SENSITIVE]",
+        # and the backend smoke test would not notice the broken frontend.
+        api_url="$(sed -n 's/^VITE_API_URL=//p' .vercel/.env.production.local | tr -d '"\r')"
+        if [[ ! "$api_url" =~ ^https?://[^/[:space:]]+ ]]; then
+          echo "FAIL: VITE_API_URL in Vercel is not a URL (got '${api_url}')."
+          echo "Recreate it in Vercel without the Sensitive option."
+          exit 1
+        fi
+        if [[ "${api_url%/}" != "${API_URL%/}" ]]; then
+          echo "::warning::VITE_API_URL in Vercel ($api_url) differs from this environment's api-url ($API_URL)"
+        fi
+        echo "ok: VITE_API_URL is $api_url"
         vercel build --prod --token="$VERCEL_TOKEN"
         vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
 

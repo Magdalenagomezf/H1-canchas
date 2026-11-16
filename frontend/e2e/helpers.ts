@@ -50,13 +50,14 @@ export async function loginAsAdmin(): Promise<APIRequestContext> {
 export async function registerCustomer(name: string) {
   const anon = await apiAs();
   const phone = uniquePhone();
+  const email = `e2e-${uniqueTag()}@example.com`;
   await ok(
     await anon.post('/auth/register', {
-      data: { name, phone, password: TEST_PASSWORD, email: `e2e-${uniqueTag()}@example.com` },
+      data: { name, phone, password: TEST_PASSWORD, email },
     }),
   );
   await anon.dispose();
-  return { name, phone, password: TEST_PASSWORD };
+  return { name, phone, email, password: TEST_PASSWORD };
 }
 
 export interface TestSpace {

@@ -79,6 +79,7 @@ func applyMigrations(db *sqlx.DB) error {
 		"008_normalize_user_email.sql",
 		"009_add_confirmation_email_sent_at.sql",
 		"010_google_login.sql",
+		"011_password_reset_tokens.sql",
 	}
 
 	for _, f := range files {
@@ -96,7 +97,7 @@ func applyMigrations(db *sqlx.DB) error {
 // truncateAll wipes all tables before each test.
 func truncateAll(t *testing.T) {
 	t.Helper()
-	_, err := testDB.Exec("TRUNCATE users, spaces, space_slots, bookings, payments, booking_batches CASCADE")
+	_, err := testDB.Exec("TRUNCATE users, spaces, space_slots, bookings, payments, booking_batches, password_reset_tokens CASCADE")
 	if err != nil {
 		t.Fatalf("truncateAll: %v", err)
 	}

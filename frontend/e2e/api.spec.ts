@@ -92,6 +92,46 @@ test('login with a wrong password answers 401', async () => {
   await anon.dispose();
 });
 
+test('a password reset request answers the same whether the email has an account or not', async () => {
+  const c = await registerCustomer('API Reset');
+  const anon = await apiAs();
+
+  const known = await anon.post('/auth/password-reset', { data: { email: c.email } });
+  const unknown = await anon.post('/auth/password-reset', { data: { email: `nobody-${Date.now()}@example.com` } });
+  expect(known.status()).toBe(202);
+  expect(unknown.status()).toBe(202);
+  expect(await known.json()).toEqual(await unknown.json());
+  expect(await known.json()).toEqual({ message: expect.any(String) });
+
+  expect((await anon.post('/auth/password-reset', { data: {} })).status()).toBe(400);
+  await anon.dispose();
+});
+
+test('a password reset confirm rejects a bad token and a bad password', async () => {
+  const anon = await apiAs();
+
+  const badToken = await anon.post('/auth/password-reset/confirm', { data: { token: 'not-a-real-token', password: 'nueva-clave' } });
+  expect(badToken.status()).toBe(400);
+  expect(await badToken.json()).toMatchObject({ code: 'invalid_reset_token', error: expect.any(String) });
+
+  for (const password of ['12345', 'a'.repeat(73)]) {
+    const res = await anon.post('/auth/password-reset/confirm', { data: { token: 'not-a-real-token', password } });
+    expect(res.status()).toBe(400);
+    expect(await res.json()).not.toHaveProperty('code');
+  }
+  await anon.dispose();
+});
+
+test('a password reset check rejects a missing or made-up token', async () => {
+  const anon = await apiAs();
+  for (const data of [{ token: 'not-a-real-token' }, { token: '' }, {}]) {
+    const res = await anon.post('/auth/password-reset/check', { data });
+    expect(res.status()).toBe(400);
+    expect(await res.json()).toMatchObject({ code: 'invalid_reset_token', error: expect.any(String) });
+  }
+  await anon.dispose();
+});
+
 test('a booked slot becomes unavailable and a second booking gets 409', async () => {
   const slotId = await slotIdOf(admin, space);
   const first = await registerCustomer('API Primero');

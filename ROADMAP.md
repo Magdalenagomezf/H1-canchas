@@ -68,7 +68,7 @@ Niveles de devolución de la seña (de menor a mayor trabajo). Hoy, con la seña
 ### E5. Cuentas en producción
 - [ ] Deploy de "Mail y cuentas" (ver la sección del mismo nombre en `RESUMEN-PROYECTO.md`): migraciones `009` y `010`, variables, dominio propio en Resend.
 - [ ] Google Cloud: agregar el dominio de producción y publicar la app para que entren clientes reales (hoy solo entran los usuarios de prueba).
-- [ ] Restablecer contraseña por mail.
+- [x] Restablecer contraseña por mail (2026-11-13). Link de un solo uso que vence en 1 hora, pantallas `/recuperar-contrasena` y `/restablecer-contrasena`. Falta aplicar la migración `011` en QA y PROD antes de deployar.
 - [ ] **Cerrar el riesgo de vinculación de Google por email** (D7, decidido el 2026-11-09: opción A del riesgo aceptado en `RESUMEN-PROYECTO.md`). Al vincular Google a una cuenta existente, se borra su contraseña: quien se registró con un email ajeno pierde el acceso. Si la cuenta era legítima, el dueño sigue entrando con Google y puede volver a tener contraseña con "restablecer contraseña", así que conviene hacerlo **después** de esa tarea. Avisarle al usuario al vincular que su contraseña anterior dejó de funcionar. Al terminar, actualizar la sección del riesgo en `RESUMEN-PROYECTO.md`.
 
 ### E6. Cobros en el complejo: saldo de la cancha y ventas extra
@@ -122,7 +122,7 @@ D6 decidido (2026-11-09): las dos cosas, lo legal y lo técnico. Checklist armad
 - [ ] **Términos y condiciones** y **Política de privacidad**: Google los puede pedir al publicar la app, y la app guarda nombre, teléfono y email, alcanzados por la Ley 25.326 de protección de datos personales. Incluir la política de cancelación (D3). Conviene que lo revise alguien con conocimiento legal.
 - [ ] **Límite de intentos** en login, registro, login con Google y restablecer contraseña. Hoy no hay ninguno: alguien podría probar contraseñas sin fin contra un teléfono.
 - [ ] **Backups de la base de PROD**, y probar al menos una vez que se pueden restaurar. Revisar qué incluye el plan del proveedor elegido (D1).
-- [ ] **Contraseña mínima de 8 caracteres** (hoy son 6) y contraseñas fuertes para las cuentas de staff.
+- [ ] **Contraseña mínima de 8 caracteres** (hoy son 6; el máximo de 72 bytes, límite de bcrypt, ya se valida) y contraseñas fuertes para las cuentas de staff.
 - [ ] **Secretos de PROD:** solo en las variables del proveedor y en el environment `production` de GitHub. Rotar cualquiera que se haya compartido o pegado en un chat.
 - [ ] **Dependencias con vulnerabilidades conocidas:** `govulncheck` (Go) y `npm audit` (frontend) en el CI, y Dependabot en GitHub.
 - [ ] Cerrar el riesgo de vinculación de Google por email (ver E5).

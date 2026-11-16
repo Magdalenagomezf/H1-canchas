@@ -47,6 +47,7 @@ func userInputErrorStatus(err error) (status int, ok bool) {
 		errors.Is(err, service.ErrInvalidPhone),
 		errors.Is(err, service.ErrPasswordRequired),
 		errors.Is(err, service.ErrPasswordTooShort),
+		errors.Is(err, service.ErrPasswordTooLong),
 		errors.Is(err, service.ErrEmailRequired),
 		errors.Is(err, service.ErrInvalidEmail):
 		return http.StatusBadRequest, true

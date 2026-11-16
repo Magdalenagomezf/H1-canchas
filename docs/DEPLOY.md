@@ -35,7 +35,7 @@ Hacela **antes de mergear el PR que agrega el pipeline**. Ese merge dispara el p
 
 ### 2. PROD (servicios nuevos)
 
-1. **Supabase:** creá un proyecto nuevo y aplicá las migraciones de `backend/migrations/` en orden (001 → 010). El plan gratuito permite 2 proyectos activos, así que con QA + PROD queda completo.
+1. **Supabase:** creá un proyecto nuevo y aplicá las migraciones de `backend/migrations/` en orden (001 → 011). El plan gratuito permite 2 proyectos activos, así que con QA + PROD queda completo.
 2. **Render:** creá un Web Service nuevo desde el mismo repo.
    - Root directory: `backend`
    - Build: `go build -tags netgo -ldflags '-s -w' -o app ./cmd`

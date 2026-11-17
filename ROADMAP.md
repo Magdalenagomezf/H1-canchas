@@ -19,6 +19,7 @@ Cómo se usa este archivo:
 | D9 | **Precios por horario y días especiales** (a hablar con el cliente): ¿cobran distinto de noche (por la luz) o los fines de semana? ¿Hay feriados o días cerrados? Hoy cada cancha tiene un solo precio y todos los turnos abren todos los días. Si aplica, se crea una épica. | — |
 | D10 | **Porcentaje de la seña** (a hablar con el cliente): hoy es 15% (`DEPOSIT_PERCENTAGE`), un valor puesto por defecto. | E4 |
 | D11 | **Facturación** (a hablar con el cliente): ¿cómo factura el complejo? Si tiene que emitir comprobantes electrónicos (ARCA, ex AFIP), puede ser un tema grande. Primero saber si aplica; no implica hacerlo ya. | — |
+| D12 | **Dominio propio** (a hablar con el cliente): conviene que lo registre él, a su nombre, en NIC Argentina con su clave fiscal. Un `.com.ar` sale $8.500 por año (registro y cada renovación, tabla de nic.ar consultada el 2026-11-16) y hay que renovarlo todos los años. **2026-11-16: todavía no lo van a comprar.** Mientras tanto no hay mails reales en PROD (Resend), ni Google publicado con origen propio. | E5, E18 |
 
 ---
 
@@ -151,7 +152,7 @@ D6 decidido (2026-11-09): las dos cosas, lo legal y lo técnico. Checklist armad
 - [ ] Borrar o rehacer `DESIGN-SYSTEM.md` (describe el diseño anterior) y borrar `frontend/README.md` (plantilla de Vite).
 
 ### E18. Monitoreo de PROD y dominio propio
-- [ ] **Dominio propio** (p. ej. `h1canchas.com.ar`). Lo necesitan Resend (dominio verificado, para no caer en spam), Google Cloud (origen autorizado) y Mercado Pago (webhook y URLs de vuelta). Con dominio propio, cambiar de servidor no obliga a cambiar esas URLs.
+- [ ] **Dominio propio** (p. ej. `h1canchas.com.ar`), **pendiente de D12** (2026-11-16: el cliente todavía no lo compra). Cuando exista: verificarlo en Resend, cambiar `EMAIL_FROM` y cargar `RESEND_API_KEY` en PROD. Lo necesitan Resend (dominio verificado, para no caer en spam), Google Cloud (origen autorizado) y Mercado Pago (webhook y URLs de vuelta). Con dominio propio, cambiar de servidor no obliga a cambiar esas URLs.
 - [ ] **Aviso si la app se cae:** monitor de disponibilidad gratuito (p. ej. UptimeRobot) contra `/health` de PROD, con aviso por mail.
 - [ ] **Aviso de errores:** herramienta tipo Sentry en backend y frontend, para enterarse de un error con su detalle antes de que un cliente se queje.
 

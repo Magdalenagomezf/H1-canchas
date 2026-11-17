@@ -110,12 +110,15 @@ func (m *mockSpaceRepoForBooking) GetByID(ctx context.Context, id int64) (*domai
 
 // helpers
 
+// tomorrow and yesterday count from the Argentina date the service uses
+// (argToday), not the UTC date: from 21:00 to 24:00 in Argentina, UTC is
+// already on the next day and a UTC "yesterday" is still today there.
 func tomorrow() time.Time {
-	return time.Now().UTC().AddDate(0, 0, 1)
+	return argToday().AddDate(0, 0, 1)
 }
 
 func yesterday() time.Time {
-	return time.Now().UTC().AddDate(0, 0, -1)
+	return argToday().AddDate(0, 0, -1)
 }
 
 func activeSpaceWithPrice(price float64) *domain.Space {
